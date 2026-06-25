@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --bg: #0e1014;
+      --surface: #1a1d23;
+      --surface-2: #222630;
+      --text: #e7e9ea;
+      --text-muted: #71767b;
+      --border: #2f3336;
+      --border-strong: #3e4144;
+      --accent: #1d9bf0;
+      --accent-soft: rgba(29, 155, 240, 0.15);
+      --danger: #f4212e;
+      --success: #00ba7c;
+      --warning: #e0a526;
+      --radius: 10px;
+      --radius-sm: 8px;
+    }
+
+    body.light-mode {
+      --bg: #ffffff;
+      --surface: #f4f5f7;
+      --surface-2: #ffffff;
+      --text: #0f1419;
+      --text-muted: #536471;
+      --border: #eff3f4;
+      --border-strong: #cfd9de;
+      --accent-soft: rgba(29, 155, 240, 0.10);
+      --danger: #f4212e;
+      --success: #00ba7c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      width: 384px;
+      height: 600px;
+      overflow: hidden;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .container { padding: 0; display: flex; flex-direction: column; height: 600px; }
+
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 11px; }
+    .header h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
+    .header h3 .v { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+
+    .dark-mode-toggle { background: none; border: none; font-size: 15px; cursor: pointer; padding: 6px; border-radius: 999px; color: var(--text-muted); }
+    .dark-mode-toggle:hover { background: var(--surface); }
+
+    .tabs { display: flex; gap: 3px; margin-bottom: 13px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .tab { padding: 9px 10px; cursor: pointer; border-bottom: 2px solid transparent; flex-shrink: 0; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Home */
+    .home-hero { display: flex; align-items: center; gap: 12px; padding: 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 10px; }
+    .home-hero.protected { border-color: rgba(0, 186, 124, 0.45); background: rgba(0, 186, 124, 0.07); }
+    .hero-icon { font-size: 28px; line-height: 1; }
+    .hero-text { flex: 1; }
+    .hero-title { font-size: 16px; font-weight: 700; }
+    .hero-sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+    .home-proxy { display: flex; align-items: center; gap: 9px; padding: 11px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; margin-bottom: 10px; cursor: pointer; }
+    .home-proxy:hover { border-color: var(--border-strong); }
+    .hp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+    .home-proxy.active .hp-dot { background: var(--success); }
+    .hp-addr { font-family: ui-monospace, monospace; font-size: 12px; flex: 1; word-break: break-all; }
+    .hp-meta { color: var(--text-muted); font-size: 11px; }
+    .hp-switch { color: var(--accent); font-size: 11px; font-weight: 700; }
+    .home-checks { display: flex; gap: 6px; flex-wrap: wrap; }
+    .home-checks .chip { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 10px; border-radius: 99px; }
+    .home-checks .chip.ok { background: rgba(0, 186, 124, 0.15); color: var(--success); border-color: transparent; }
+
+    .profiles-head { color: var(--text-muted); font-size: 10px; letter-spacing: 0.5px; margin: 14px 0 8px; }
+    .profiles-list { display: flex; flex-direction: column; margin-bottom: 10px; }
+    .profile-row { display: flex; align-items: center; gap: 9px; padding: 9px 2px; border-bottom: 1px solid var(--surface); cursor: pointer; }
+    .profile-row:hover { background: var(--surface); }
+    .pr-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+    .profile-row.active .pr-dot { background: var(--success); }
+    .pr-name { color: var(--text); font-size: 13px; font-weight: 500; flex: 1; }
+    .pr-meta { color: var(--text-muted); font-size: 11px; }
+    .pr-action { color: var(--accent); font-size: 11px; font-weight: 700; }
+    .profile-row.active .pr-action { color: var(--success); }
+    .pr-del { color: var(--text-muted); font-size: 17px; line-height: 1; padding: 0 4px; cursor: pointer; }
+    .pr-del:hover { color: var(--danger); }
+    .pr-proxy { color: var(--accent); font-size: 10px; font-weight: 700; padding: 0 4px; cursor: pointer; flex-shrink: 0; }
+    .pr-proxy:hover { text-decoration: underline; }
+    .pr-proxy-input { flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; font-family: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--accent); border-radius: 5px; }
+    #newProfileName, #newProfileProxy { width: 100%; padding: 9px 11px; margin-bottom: 6px; }
+    .hero-title-row { display: flex; align-items: center; gap: 6px; }
+    .rename-btn { font-size: 12px; cursor: pointer; opacity: 0.55; }
+    .sub-back { display: inline-flex; align-items: center; color: var(--accent); font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 12px; }
+    .rename-btn:hover { opacity: 1; }
+    .hero-icon { cursor: pointer; }
+    .np-note { color: var(--text-muted); font-size: 11px; margin-bottom: 8px; line-height: 1.5; }
+    .fpmode-pill { flex: 1; text-align: center; font-size: 11px; padding: 7px 4px; border: 1px solid var(--border, #2a2d35); border-radius: 9px; color: var(--text-muted); cursor: pointer; user-select: none; }
+    .fpmode-pill.on { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+    .id-head { color: var(--text-muted); font-size: 10px; letter-spacing: 0.5px; margin: 4px 0 8px; }
+    .id-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .id-card { display: flex; align-items: center; gap: 11px; padding: 13px 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; cursor: pointer; transition: border-color 0.12s; }
+    .id-card:hover { border-color: var(--border-strong); }
+    .id-card.active { border-color: var(--accent); }
+    .id-card.active.protected { border-color: var(--success); }
+    .idc-cc { width: 26px; height: 26px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: 10px; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .id-card.active .idc-cc { color: var(--accent); border-color: var(--accent); }
+    .idc-text { flex: 1; min-width: 0; }
+    .idc-name { font-size: 13px; font-weight: 500; color: var(--text); }
+    .idc-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+    .id-card.active.protected .idc-sub { color: var(--success); }
+    .idc-edit { font-size: 11px; color: var(--accent); font-weight: 700; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
+    .sheet-cap { font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 5px; }
+    .ed-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text); padding: 10px 0; border-bottom: 1px solid var(--surface); }
+    .sw { width: 36px; height: 20px; border-radius: 999px; background: var(--border-strong); position: relative; cursor: pointer; flex-shrink: 0; }
+    .sw.on { background: var(--success); }
+    .sw i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px; background: #fff; transition: left 0.12s; }
+    .sw.on i { left: 18px; }
+    .topbar { display: flex; align-items: center; padding: 13px 16px 9px; flex-shrink: 0; }
+    .brand { margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 7px; flex: 1; color: var(--text); }
+    .brand-dot { width: 15px; height: 15px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+    .brand .v { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+    .screens { flex: 1; overflow-y: auto; padding: 4px 16px 14px; }
+    .botnav { display: flex; border-top: 1px solid var(--border); flex-shrink: 0; background: var(--bg); }
+    .bn { flex: 1; text-align: center; padding: 8px 0 10px; font-size: 10px; color: var(--text-muted); cursor: pointer; }
+    .bn.on { color: var(--text); }
+    .bn b { display: block; font-size: 18px; font-weight: 400; line-height: 1.1; margin-bottom: 1px; }
+    .cap { font-size: 10px; letter-spacing: 0.5px; color: var(--text-muted); margin: 8px 0 8px; }
+    .set-plan { display: flex; align-items: center; gap: 11px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+    .set-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text); padding: 12px 2px; border-bottom: 1px solid var(--surface); cursor: pointer; text-decoration: none; }
+    .set-row:hover { color: var(--accent); }
+    .set-row .ic { width: 18px; text-align: center; color: var(--text-muted); flex-shrink: 0; }
+    .set-row .chev { margin-left: auto; color: var(--text-muted); font-size: 15px; }
+    .set-about { font-size: 11px; color: var(--text-muted); margin-top: 16px; text-align: center; }
+
+    textarea, input[type="text"], input[type="number"], select {
+      font-family: inherit; font-size: 13px; color: var(--text);
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    textarea:focus, input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    textarea { width: 100%; height: 84px; padding: 10px; font-family: ui-monospace, monospace; resize: vertical; line-height: 1.5; }
+
+    .button-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 11px 0 13px; }
+    button { padding: 10px 14px; border: none; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; font-size: 13px; font-family: inherit; transition: all 0.12s; }
+    button:active { transform: scale(0.98); }
+    .btn-primary, .btn-success { background: var(--accent); color: #fff; }
+    .btn-primary:hover, .btn-success:hover { filter: brightness(1.1); }
+    .btn-secondary, .btn-warning { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+    .btn-secondary:hover, .btn-warning:hover { background: var(--surface); }
+    .btn-danger { background: transparent; color: var(--danger); border: 1px solid rgba(244, 33, 46, 0.45); }
+    .btn-danger:hover { background: rgba(244, 33, 46, 0.12); }
+    #newProfileBtn, #editorSave, #settingsUpgrade { background: var(--text); color: var(--bg); font-weight: 600; }
+    #newProfileBtn:hover, #editorSave:hover, #settingsUpgrade:hover { filter: none; opacity: 0.88; }
+
+    .overflow-menu { position: relative; display: inline-block; }
+    .overflow-menu #moreBtn { padding: 9px 13px; line-height: 1; }
+    .overflow-dropdown {
+      position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; min-width: 170px; padding: 6px;
+      background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 2px;
+    }
+    .overflow-dropdown button { background: transparent; color: var(--text); text-align: left; padding: 9px 11px; font-size: 13px; font-weight: 400; border-radius: 6px; }
+    .overflow-dropdown button:hover { background: var(--surface); }
+    #clearBtn, #deleteCookiesBtn, #deleteHistoryBtn { color: var(--danger); }
+
+    .status-bar { padding: 10px 12px; margin-bottom: 12px; border-radius: var(--radius-sm); background: var(--surface); border-left: 3px solid var(--accent); font-size: 13px; }
+
+    .proxy-list { display: flex; flex-direction: column; gap: 8px; }
+    .proxy-item { padding: 12px 13px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+    .proxy-item:hover { border-color: var(--border-strong); }
+    .px-showpass { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-muted); margin: 2px 0 10px; cursor: pointer; }
+    .proxy-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .proxy-address { font-weight: 500; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; flex-grow: 1; }
+    .proxy-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+    .status { font-weight: 700; padding: 2px 9px; border-radius: 99px; font-size: 11px; }
+    .status.working { background: rgba(0, 186, 124, 0.16); color: var(--success); }
+    .status.dead { background: rgba(244, 33, 46, 0.16); color: var(--danger); }
+    .status.testing { background: rgba(224, 165, 38, 0.18); color: var(--warning); }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .actions button { padding: 6px 12px; font-size: 12px; }
+    .active-proxy { background: var(--accent-soft); border-color: var(--accent); }
+
+    .filter-group { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+    .filter-group select, .filter-group input { padding: 8px 10px; }
+    .filter-group input { flex: 1; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+    .stat-card { padding: 14px; border-radius: var(--radius); background: var(--surface); }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--text); }
+    .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    .settings-section, .security-section, .spoofing-section { margin-bottom: 16px; }
+    .settings-section h4, .security-section h4, .spoofing-section h4 {
+      margin: 14px 0 6px; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--text-muted); border: none; padding: 0;
+    }
+
+    .toggle-container, .select-container, .input-container {
+      display: flex; align-items: center; padding: 11px 2px; border-bottom: 1px solid var(--surface);
+    }
+    .toggle-label, .select-label, .input-label { flex-grow: 1; margin-right: 12px; font-size: 13px; }
+    .select-container select, .input-container input { padding: 6px 9px; min-width: 110px; }
+    .input-container input { width: 130px; }
+
+    .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; inset: 0; background: var(--border-strong); transition: 0.2s; border-radius: 99px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #fff; transition: 0.2s; border-radius: 50%; }
+    input:checked + .slider { background: var(--accent); }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    .settings-section > label { display: block; font-size: 13px; color: var(--text-muted); margin: 10px 0 6px; }
+    #rotationInterval, #rotationStrategy { width: 100%; padding: 9px 10px; margin-bottom: 4px; }
+
+    .user-agent-container { margin-bottom: 8px; padding: 0; }
+    .user-agent-container label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-muted); }
+    .user-agent-container select { width: 100%; padding: 8px 10px; margin-bottom: 8px; }
+    .user-agent-container textarea { width: 100%; height: 54px; padding: 8px; font-size: 12px; }
+
+    .diag-list { display: flex; flex-direction: column; margin-bottom: 4px; }
+    .diag-item { display: flex; align-items: center; gap: 10px; padding: 11px 2px; border-bottom: 1px solid var(--surface); }
+    .diag-item .d-label { color: var(--text); font-size: 13px; flex-shrink: 0; }
+    .diag-item .d-value { margin-left: auto; font-size: 12px; color: var(--text-muted); text-align: right; word-break: break-all; }
+    .d-value.d-ok { color: var(--success); }
+    .d-value.d-warn { color: var(--warning); }
+    .d-value.d-bad { color: var(--danger); }
+    .d-ic { color: var(--text-muted); width: 17px; text-align: center; flex-shrink: 0; }
+    .diag-note { margin: 8px 0 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--accent-soft); font-size: 12px; color: var(--text); }
+    .diag-note.dashed { background: none; border: 1px dashed var(--border-strong); color: var(--text-muted); text-align: center; }
+    .diag-empty { color: var(--text-muted); font-size: 13px; padding: 10px 12px; }
+    .dg-score { display: flex; align-items: center; justify-content: space-between; padding: 6px 2px 12px; }
+    .dg-verdict { font-size: 12px; font-weight: 600; margin-top: 2px; }
+    .dg-detail { margin-top: 2px; }
+    .dg-drow { display: flex; align-items: center; gap: 9px; padding: 6px 2px; font-size: 12px; color: var(--text); border-top: 1px solid var(--surface); }
+    .dg-check { width: 14px; text-align: center; font-weight: 700; flex-shrink: 0; }
+    .dg-check.ok { color: var(--success); }
+    .dg-check.bad { color: var(--danger); }
+    .dg-xtra { font-size: 10px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+    .dg-toggle { text-align: center; font-size: 12px; color: var(--accent); cursor: pointer; padding: 9px; }
+    .dg-score .lbl { font-size: 13px; font-weight: 600; color: var(--text); }
+    .dg-score b { font-size: 26px; font-weight: 700; }
+    .dg-card { display: flex; align-items: center; gap: 10px; padding: 12px 2px; border-top: 1px solid var(--surface); }
+    .dg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dg-dot.ok { background: var(--success); }
+    .dg-dot.warn { background: var(--warning); }
+    .dg-dot.bad { background: var(--danger); }
+    .dg-card .dg-name { font-size: 13px; color: var(--text); }
+    .dg-card .dg-val { margin-left: auto; font-size: 12px; text-align: right; word-break: break-all; }
+    .dg-val.ok { color: var(--success); }
+    .dg-val.warn { color: var(--warning); }
+    .dg-val.bad { color: var(--danger); }
+    .dg-fresh { font-size: 11px; color: var(--text-muted); margin-top: 12px; text-align: center; }
+
+    .notification { position: fixed; top: 16px; right: 16px; padding: 12px 16px; border-radius: var(--radius-sm); color: #fff; font-weight: 700; font-size: 13px; z-index: 10001; animation: slideIn 0.3s, slideOut 0.3s 2.7s; animation-fill-mode: forwards; }
+    .notification.success { background: var(--success); }
+    .notification.error { background: var(--danger); }
+    .notification.info { background: var(--accent); }
+    @keyframes slideIn { from { transform: translateX(120%); } to { transform: translateX(0); } }
+    @keyframes slideOut { from { transform: translateX(0); } to { transform: translateX(120%); } }
+
+    .footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); text-align: center; font-size: 12px; color: var(--text-muted); }
+    .footer a { color: var(--accent); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <h3 class="brand"><span class="brand-dot"></span>ProxyBro <span class="v" id="versionBadge"></span><span id="proBadge" style="display:none; margin-left:5px; align-items:center; padding:1px 7px; border-radius:999px; background:var(--accent-soft); color:var(--accent); font-size:11px; font-weight:600;">PRO</span></h3>
+      <button class="dark-mode-toggle" id="darkModeToggle">🌙</button>
+    </div>
+    <div class="screens" id="screens">
+
+    <div class="tab-content active" id="home-tab">
+      <div class="id-head">YOUR IDENTITIES <span id="profileCount"></span></div>
+      <div id="profilesList" class="id-cards"></div>
+      <button id="newProfileBtn" class="btn-primary" style="width: 100%;">+ New identity</button>
+      <div id="goDirectWrap" style="text-align:center; margin-top:10px; display:none;">
+        <span id="goDirectLink" style="font-size:12px; color:var(--text-muted); cursor:pointer;">Turn off — use your real IP</span>
+      </div>
+    </div>
+
+    <div class="tab-content" id="proxies-tab">
+      <div class="cap">BULK IMPORT · PROXY POOL</div>
+      <textarea id="proxyInput" placeholder="Paste proxies — one per line. host:port · host:port:user:pass · http://host:port · user:pass@host:port"></textarea>
+
+      <div class="button-group">
+        <button id="addBtn" class="btn-primary" style="flex:1;">Add proxies</button>
+        <button id="testBtn" class="btn-secondary">Test all</button>
+        <div class="overflow-menu">
+          <button id="moreBtn" class="btn-secondary" aria-label="More actions">⋯</button>
+          <div id="moreMenu" class="overflow-dropdown" style="display: none;">
+            <button id="importBtn">Import</button>
+            <button id="exportBtn">Export</button>
+            <button id="sortBtn">Sort by speed</button>
+            <button id="deactivateBtn">Deactivate proxy</button>
+            <button id="clearBtn">Clear all</button>
+            <button id="deleteCookiesBtn">Delete cookies</button>
+            <button id="deleteHistoryBtn">Delete history</button>
+          </div>
+        </div>
+      </div>
+
+      <button id="createIdentitiesBtn" class="btn-primary" style="width:100%; margin:4px 0 6px;">Create identities from working proxies</button>
+      <div class="np-note" style="margin-bottom:10px;">Each becomes an identity — this proxy + a country-matched fingerprint, on Home.</div>
+
+      <div class="filter-group">
+        <select id="statusFilter">
+          <option value="all">All</option>
+          <option value="working">Working</option>
+          <option value="dead">Dead</option>
+        </select>
+        <input type="text" id="searchFilter" placeholder="Search proxies…">
+      </div>
+      <label class="px-showpass"><input type="checkbox" id="showPasswords"> Show passwords</label>
+
+      <div id="statusMsg" class="status-bar">Ready</div>
+
+      <div id="proxyList" class="proxy-list"></div>
+    </div>
+
+    <div class="tab-content" id="spoofing-tab">
+      <div class="sub-back" data-subback="home">&lsaquo; Back</div>
+      <div class="spoofing-section" data-group="identity">
+        <h4>User-Agent Templates</h4>
+        <div class="user-agent-container">
+          <label for="userAgentTemplate">Select User-Agent Template</label>
+          <select id="userAgentTemplate">
+            <option value="">-- Select Template --</option>
+            <option value="chrome_windows">Chrome on Windows</option>
+            <option value="chrome_mac">Chrome on macOS</option>
+            <option value="chrome_linux">Chrome on Linux</option>
+            <option value="firefox_windows">Firefox on Windows</option>
+            <option value="firefox_mac">Firefox on macOS</option>
+            <option value="firefox_linux">Firefox on Linux</option>
+            <option value="safari_mac">Safari on macOS</option>
+            <option value="edge_windows">Edge on Windows</option>
+            <option value="mobile_safari">Mobile Safari (iPhone)</option>
+            <option value="mobile_chrome">Chrome on Android</option>
+          </select>
+          <label for="customUserAgent">Custom User-Agent</label>
+          <textarea id="customUserAgent" placeholder="Enter custom User-Agent"></textarea>
+          <button id="applyUserAgent" class="btn-primary">Apply User-Agent</button>
+        </div>
+      </div>
+
+      <div class="spoofing-section" data-group="graphics">
+        <h4>Browser Spoofing</h4>
+        <div class="select-container">
+          <label class="select-label" for="webrtcMode">WebRTC</label>
+          <select id="webrtcMode">
+            <option value="off">Off</option>
+            <option value="real">Real</option>
+            <option value="altered">Altered</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="canvasMode">Canvas</label>
+          <select id="canvasMode">
+            <option value="off">Off</option>
+            <option value="real">Real</option>
+            <option value="noise">Noise</option>
+          </select>
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="webglMode">WebGL</label>
+          <select id="webglMode">
+            <option value="off">Off</option>
+            <option value="real">Real</option>
+            <option value="noise">Noise</option>
+          </select>
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="webglInfoMode">WebGL Info</label>
+          <select id="webglInfoMode">
+            <option value="real">Real</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="input-container" id="webglVendorContainer" style="display: none;">
+          <label class="input-label" for="webglVendor">WebGL Vendor</label>
+          <input type="text" id="webglVendor" placeholder="Google Inc.">
+        </div>
+        <div class="input-container" id="webglRendererContainer" style="display: none;">
+          <label class="input-label" for="webglRenderer">WebGL Renderer</label>
+          <input type="text" id="webglRenderer" placeholder="ANGLE (Apple, Apple M1 Max, OpenGL 4.1)">
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="webgpuMode">WebGPU</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="webgpuMode">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="clientRectsMode">Client Rects</label>
+          <select id="clientRectsMode">
+            <option value="real">Real</option>
+            <option value="noise">Noise</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="spoofing-section" data-group="location">
+        <h4>General Parameters</h4>
+        <div class="select-container">
+          <label class="select-label" for="timezoneMode">Timezone</label>
+          <select id="timezoneMode">
+            <option value="auto">Auto</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="input-container" id="timezoneContainer" style="display: none;">
+          <label class="input-label" for="timezone">Timezone</label>
+          <input type="text" id="timezone" placeholder="America/New_York">
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="languageMode">Language</label>
+          <select id="languageMode">
+            <option value="auto">Auto</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="input-container" id="languageContainer" style="display: none;">
+          <label class="input-label" for="language">Language</label>
+          <input type="text" id="language" placeholder="en-US">
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="geolocationMode">Geolocation</label>
+          <select id="geolocationMode">
+            <option value="auto">Auto</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="input-container" id="geolocationContainer" style="display: none;">
+          <label class="input-label" for="geolocation">Geolocation</label>
+          <input type="text" id="geolocation" placeholder="40.7128,-74.0060">
+        </div>
+      </div>
+
+      <div class="spoofing-section" data-group="hardware">
+        <h4>Hardware Parameters</h4>
+        <div class="select-container">
+          <label class="select-label" for="cpuMode">CPU</label>
+          <select id="cpuMode">
+            <option value="real">Real</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="input-container" id="cpuContainer" style="display: none;">
+          <label class="input-label" for="cpuCores">CPU Cores</label>
+          <select id="cpuCores">
+            <option value="2">2</option>
+            <option value="4">4</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+            <option value="12">12</option>
+            <option value="16">16</option>
+            <option value="24">24</option>
+            <option value="32">32</option>
+          </select>
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="memoryMode">Memory</label>
+          <select id="memoryMode">
+            <option value="real">Real</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="input-container" id="memoryContainer" style="display: none;">
+          <label class="input-label" for="memoryGB">Memory (GB)</label>
+          <select id="memoryGB">
+            <option value="2">2</option>
+            <option value="4">4</option>
+            <option value="8">8</option>
+            <option value="16">16</option>
+            <option value="32">32</option>
+            <option value="64">64</option>
+            <option value="128">128</option>
+          </select>
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="macAddressMode">MAC Address</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="macAddressMode">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="input-container" id="macAddressContainer" style="display: none;">
+          <label class="input-label" for="macAddress">MAC Address</label>
+          <input type="text" id="macAddress" placeholder="00:1A:2B:3C:4D:5E">
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="deviceNameMode">Device Name</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="deviceNameMode">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="input-container" id="deviceNameContainer" style="display: none;">
+          <label class="input-label" for="deviceName">Device Name</label>
+          <input type="text" id="deviceName" placeholder="MacBook-Pro">
+        </div>
+      </div>
+
+      <div class="spoofing-section" data-group="hardware">
+        <h4>Screen and Media</h4>
+        <div class="select-container">
+          <label class="select-label" for="fontsMode">Fonts</label>
+          <select id="fontsMode">
+            <option value="auto">Auto</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="input-container" id="fontsContainer" style="display: none;">
+          <label class="input-label" for="fonts">Fonts</label>
+          <input type="text" id="fonts" placeholder="Arial, Times New Roman">
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="audioMode">Audio</label>
+          <select id="audioMode">
+            <option value="real">Real</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="screenMode">Screen</label>
+          <select id="screenMode">
+            <option value="real">Real</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="input-container" id="screenContainer" style="display: none;">
+          <label class="input-label" for="screenResolution">Screen Resolution</label>
+          <input type="text" id="screenResolution" placeholder="1920x1080">
+        </div>
+        <div class="select-container">
+          <label class="select-label" for="mediaDevicesMode">Media Devices</label>
+          <select id="mediaDevicesMode">
+            <option value="real">Real</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="doNotTrack">Do Not Track</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="doNotTrack">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <button id="saveSpoofingSettings" class="btn-primary">Save Settings</button>
+      </div>
+    </div>
+
+    <div class="tab-content" id="security-tab">
+      <div class="sub-back" data-subback="home">&lsaquo; Back</div>
+      <div class="security-section">
+        <h4>Connection Security</h4>
+        <div class="toggle-container">
+          <label class="toggle-label" for="webrtcProtection">WebRTC Leak Protection</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="webrtcProtection">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="killSwitch">Kill Switch</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="killSwitch">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="dnsRouting">DNS Routing</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="dnsRouting">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="security-section">
+        <h4>Privacy Protection</h4>
+        <div class="toggle-container">
+          <label class="toggle-label" for="blockWebSockets">Block WebSockets</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="blockWebSockets">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="fingerprintProtection">Fingerprint Protection</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="fingerprintProtection">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="userAgentRotation">User-Agent Rotation</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="userAgentRotation">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="blockTracking">Block Tracking Scripts</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="blockTracking">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-container">
+          <label class="toggle-label" for="clearCookies">Clear Cookies on Proxy Change</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="clearCookies">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <button id="saveSecuritySettings" class="btn-primary">Save Settings</button>
+      </div>
+
+      <div class="settings-section">
+        <h4>Proxy Rotation</h4>
+        <div class="toggle-container">
+          <label class="toggle-label" for="enableRotation">Enable automatic rotation</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="enableRotation">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <label for="rotationInterval">Rotation Interval (minutes)</label>
+        <input type="number" id="rotationInterval" value="30" min="1">
+        <label for="rotationStrategy">Rotation Strategy</label>
+        <select id="rotationStrategy">
+          <option value="random">Random</option>
+          <option value="fastest">Fastest</option>
+          <option value="roundrobin">Round Robin</option>
+        </select>
+        <button id="saveRotationSettings" class="btn-primary">Save Settings</button>
+      </div>
+    </div>
+
+    <div class="tab-content" id="stats-tab">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalProxies">0</div>
+          <div class="stat-label">Total Proxies</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="workingProxies">0</div>
+          <div class="stat-label">Working Proxies</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="avgSpeed">0ms</div>
+          <div class="stat-label">Avg Speed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="rotationsCount">0</div>
+          <div class="stat-label">Rotations</div>
+        </div>
+      </div>
+      <div class="button-group">
+        <button id="refreshStats" class="btn-primary">Refresh Stats</button>
+        <button id="resetStats" class="btn-danger">Reset Stats</button>
+      </div>
+    </div>
+
+    <div class="tab-content" id="diagnostics-tab">
+      <div class="cap">PROTECTION</div>
+      <div id="diagResults" class="diag-list">
+        <div class="diag-empty">Checking…</div>
+      </div>
+      <button id="runDiagnostics" class="btn-secondary" style="width:100%; margin-top:10px;">Re-check now</button>
+    </div>
+
+    <div class="tab-content" id="settings-tab">
+      <div class="cap">PLAN</div>
+      <div class="set-plan">
+        <span class="idc-cc" id="planBadge">F</span>
+        <div style="flex:1; min-width:0;"><div class="idc-name" id="planName">Free plan</div><div class="idc-sub" id="planSub">1 identity</div></div>
+        <button id="settingsUpgrade" class="btn-primary" style="width:auto; padding:7px 13px;">Upgrade</button>
+      </div>
+      <div class="set-row" id="releaseLicenseRow" data-act="release" style="display:none;"><span class="ic">⏏</span>Release license on this device<span class="chev">›</span></div>
+      <div class="cap" style="margin-top:14px;">PROXIES &amp; DATA</div>
+      <div class="set-row" data-screen="proxies"><span class="ic">⇩</span>Bulk import proxies<span class="chev">›</span></div>
+      <div class="set-row" data-act="ioprofiles"><span class="ic">⇄</span>Import / export profiles<span class="chev">›</span></div>
+      <div class="cap" style="margin-top:14px;">APP</div>
+      <div class="set-row" data-act="theme"><span class="ic">☾</span>Theme<span id="themeVal" style="margin-left:auto; color:var(--text-muted); font-size:12px;">Dark</span><span class="chev" style="margin-left:6px;">›</span></div>
+      <a class="set-row" href="https://proxybro.app/#privacy" target="_blank"><span class="ic">⛉</span>Privacy policy<span class="chev">›</span></a>
+      <a class="set-row" href="https://proxybro.app/#terms" target="_blank"><span class="ic">▤</span>Terms of service<span class="chev">›</span></a>
+      <a class="set-row" href="mailto:support@proxybro.app"><span class="ic">✉</span>Email support<span style="margin-left:auto; color:var(--text-muted); font-size:11px;">support@proxybro.app</span></a>
+      <a class="set-row" href="https://proxybro.app" target="_blank"><span class="ic">ⓘ</span>About ProxyBro<span class="chev">›</span></a>
+      <div class="set-about">ProxyBro <span id="versionFooter"></span> · made by <a href="https://humanperzeus.com" target="_blank" style="color:var(--accent);">humanperzeus</a></div>
+    </div>
+    </div>
+    <div class="botnav">
+      <a class="bn on" data-nav="home"><b>◎</b>Home</a>
+      <a class="bn" data-nav="diagnostics"><b>◈</b>Diagnostics</a>
+      <a class="bn" data-nav="settings"><b>⚙</b>Settings</a>
+    </div>
+  </div>
+
+  <div id="paywallOverlay" style="display:none; position:fixed; inset:0; z-index:9999; background:var(--bg); padding:18px; box-sizing:border-box; overflow-y:auto;">
+    <div style="max-width:340px; margin:6px auto;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:18px;">
+        <span style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:var(--surface);">👑</span>
+        <span style="font-size:12px; color:var(--text-muted);">ProxyBro Pro</span>
+        <span id="paywallClose" style="margin-left:auto; font-size:20px; color:var(--text-muted); cursor:pointer; line-height:1;">&times;</span>
+      </div>
+      <div style="font-size:20px; font-weight:700; line-height:1.3; margin-bottom:6px; color:var(--text);">Unlock unlimited profiles</div>
+      <div style="font-size:13px; color:var(--text-muted); line-height:1.6; margin-bottom:18px;">You're on Free — 1 profile. Go Pro for unlimited account identities and advanced control.</div>
+      <div style="display:flex; flex-direction:column; gap:11px; margin-bottom:18px;">
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text);"><span style="color:var(--success);">&#10003;</span> Unlimited profiles</div>
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text);"><span style="color:var(--success);">&#10003;</span> Advanced fingerprint editor</div>
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text);"><span style="color:var(--success);">&#10003;</span> Per-profile spoofing &amp; security</div>
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text);"><span style="color:var(--success);">&#10003;</span> Priority updates</div>
+      </div>
+      <div style="display:flex; gap:6px; background:var(--surface); padding:4px; border-radius:var(--radius-sm); margin-bottom:14px;">
+        <div id="planMonthly" style="flex:1; text-align:center; padding:8px 4px; border-radius:6px; background:var(--surface-2); border:1px solid var(--accent); font-size:12px; font-weight:600; color:var(--text); cursor:pointer;">Monthly<br><span style="color:var(--text-muted); font-weight:400;">$5/mo</span></div>
+        <div id="planYearly" style="flex:1; text-align:center; padding:8px 4px; border-radius:6px; border:1px solid transparent; font-size:12px; color:var(--text); cursor:pointer;">Yearly<br><span style="color:var(--text-muted);">$30/yr</span></div>
+      </div>
+      <button id="paywallUpgrade" style="width:100%; padding:13px; background:var(--text); color:var(--bg); border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:700; cursor:pointer;">Upgrade — $5/month</button>
+      <div id="paywallLater" style="text-align:center; margin-top:12px; font-size:13px; color:var(--text-muted); cursor:pointer;">Maybe later</div>
+      <div id="paywallRestore" style="text-align:center; margin-top:10px; font-size:12px; color:var(--accent); cursor:pointer;">I have a license key</div>
+      <div id="licenseBox" style="display:none; margin-top:12px;">
+        <input type="text" id="licenseInput" placeholder="Paste your license key" style="width:100%; padding:10px 11px; margin-bottom:8px; font-family:ui-monospace,monospace; font-size:12px;">
+        <button id="licenseActivate" style="width:100%; padding:11px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-size:13px; font-weight:600; cursor:pointer;">Activate license</button>
+      </div>
+      <div style="text-align:center; margin-top:14px; font-size:11px; color:var(--text-muted);">&#128274; Secure checkout via Creem · tax included</div>
+    </div>
+  </div>
+
+  <div id="editorSheet" style="display:none; position:fixed; inset:0; z-index:9998; background:var(--bg); padding:16px; box-sizing:border-box; overflow-y:auto;">
+    <div style="max-width:340px; margin:0 auto;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+        <span id="editorBack" style="font-size:24px; color:var(--text-muted); cursor:pointer; line-height:1;">&lsaquo;</span>
+        <span id="editorTitle" style="font-size:16px; font-weight:700; color:var(--text);">New identity</span>
+      </div>
+      <div class="sheet-cap">NAME</div>
+      <input type="text" id="edName" placeholder="e.g. Instagram-2" style="width:100%; padding:9px 11px; margin-bottom:12px;">
+      <div class="sheet-cap">PROXY</div>
+      <input type="text" id="newProfileProxy" placeholder="host:port:user:pass — or blank to auto-pick" style="width:100%; padding:9px 11px; margin-bottom:8px;">
+      <div class="np-note" id="editorFp">A matching fingerprint is generated from the proxy's country — that's it.</div>
+      <div class="ed-toggle-row"><span>Block WebRTC leak</span><span class="sw on" id="edWebrtc"><i></i></span></div>
+      <div class="ed-toggle-row"><span>Clear cookies on switch</span><span class="sw on" id="edCookies"><i></i></span></div>
+      <div id="editorAdv" style="font-size:13px; color:var(--accent); cursor:pointer; margin:14px 0;">Advanced settings <span style="font-size:10px; border:1px solid var(--warning); color:var(--warning); border-radius:999px; padding:1px 6px; margin-left:4px;">PRO</span></div>
+      <button id="editorSave" class="btn-primary" style="width:100%; padding:12px;">Save &amp; activate</button>
+    </div>
+  </div>
+
+  <div id="advancedSheet" style="display:none; position:fixed; inset:0; z-index:9998; background:var(--bg); padding:16px; box-sizing:border-box; overflow-y:auto;">
+    <div style="max-width:340px; margin:0 auto;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+        <span id="advancedBack" style="font-size:24px; color:var(--text-muted); cursor:pointer; line-height:1;">&lsaquo;</span>
+        <span style="font-size:16px; font-weight:700; color:var(--text);">Advanced</span>
+        <span style="margin-left:auto; font-size:10px; font-weight:600; color:var(--warning); border:1px solid var(--warning); border-radius:999px; padding:1px 7px;">PRO</span>
+      </div>
+      <div class="np-note" style="margin-bottom:10px;">Hit Auto for a coherent fingerprint in one tap — or fine-tune each section below.</div>
+      <button id="advAuto" class="btn-primary" style="width:100%; margin-bottom:8px;">✨ Auto — generate a coherent fingerprint</button>
+      <div style="display:flex; gap:6px; margin-bottom:6px;">
+        <div class="fpmode-pill on" data-fpmode="windows">Windows only</div>
+        <div class="fpmode-pill" data-fpmode="diverse">Diverse · Win/Mac/Linux</div>
+      </div>
+      <div class="np-note" style="margin-bottom:14px;">Windows-only is the safest, most common match. Diverse rolls a different OS per identity — more real-world spread, but more fields that must stay consistent.</div>
+      <div class="set-row" data-adv="spoofing" data-group="identity"><span class="ic">◈</span>Identity — User-Agent<span class="chev">›</span></div>
+      <div class="set-row" data-adv="spoofing" data-group="location"><span class="ic">◴</span>Location — timezone · language · geo<span class="chev">›</span></div>
+      <div class="set-row" data-adv="spoofing" data-group="graphics"><span class="ic">◳</span>Graphics — Canvas · WebGL · WebRTC<span class="chev">›</span></div>
+      <div class="set-row" data-adv="spoofing" data-group="hardware"><span class="ic">▦</span>Hardware — CPU · RAM · screen · fonts<span class="chev">›</span></div>
+      <div class="set-row" data-adv="security"><span class="ic">⛨</span>Security &amp; rotation<span class="chev">›</span></div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

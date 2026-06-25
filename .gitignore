@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Chrome extension specific (if you build it)
+*.crx
+*.pem
+
+# Private files (if any)
+*.key
+*.env
+
+# Logs
+*.log
+# local preview helper
+.preview-server.js
+.claude/launch.json
+redesign-mockup.html

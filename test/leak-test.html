@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProxyBro — Leak &amp; Fingerprint Test Suite</title>
+<style>
+  :root { --bg:#14161b; --card:#1b1e24; --line:rgba(255,255,255,0.1); --txt:#e6e9ef; --mut:#8a8f99; --blue:#3b82f6; --green:#34c77b; --amber:#e0a526; --red:#e5564a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; padding:24px; }
+  .wrap { max-width:880px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 12px; color:var(--blue); }
+  a { color:var(--blue); }
+  .sub { color:var(--mut); margin:0 0 20px; font-size:13px; }
+  .banner { background:rgba(224,165,38,0.12); border:1px solid rgba(224,165,38,0.4); color:var(--amber); border-radius:8px; padding:8px 12px; font-size:13px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:16px; }
+  .readout { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px 18px; }
+  .field { font-size:13px; }
+  .field .k { color:var(--mut); display:block; }
+  .field .v { color:var(--txt); word-break:break-all; }
+  .btnrow { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 4px; }
+  button, .btn { background:#262a32; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer; text-decoration:none; display:inline-block; }
+  button:hover, .btn:hover { background:#2f343d; }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .what { color:var(--mut); font-size:12px; margin:8px 0 0; }
+  .tag { font-size:11px; padding:1px 7px; border-radius:6px; margin-left:6px; vertical-align:middle; }
+  .tag.proxy { background:rgba(59,130,246,0.15); color:#9cc2ff; }
+  .tag.strong { background:rgba(52,199,123,0.15); color:#7ee0a8; }
+  .tag.weak { background:rgba(224,165,38,0.15); color:#f0cd83; }
+  ul.check { list-style:none; padding:0; margin:0; }
+  ul.check li { display:flex; align-items:flex-start; gap:10px; padding:7px 0; border-top:1px solid var(--line); font-size:14px; }
+  ul.check li:first-child { border-top:none; }
+  ul.check input { margin-top:4px; width:16px; height:16px; accent-color:var(--green); }
+  .exp { color:var(--mut); font-size:12px; display:block; }
+  .foot { color:var(--mut); font-size:12px; margin-top:24px; text-align:center; }
+  code { background:#262a32; padding:1px 5px; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>ProxyBro — Leak &amp; Fingerprint Test Suite</h1>
+  <p class="sub">Run this in the same Chrome profile where ProxyBro is loaded. Protocol: capture a baseline with everything OFF → turn the proxy + protections ON → re-run and compare.</p>
+  <div class="banner">Dev/QA tool — not part of the published extension (excluded from the store package).</div>
+
+  <div class="card">
+    <h2>Your raw baseline <span class="tag weak">this local page is NOT spoofed</span></h2>
+    <p class="what">Extension spoofing only applies to http/https sites, so the fingerprint fields below show your browser's <strong>real</strong> values — use them as the control. The IP <em>does</em> route through the proxy when active. The buttoned sites further down show what websites actually see (spoofed).</p>
+    <div class="readout" id="readout">
+      <div class="field"><span class="k">Effective IP (via proxy if on)</span><span class="v" id="f-ip">…</span></div>
+      <div class="field"><span class="k">IP location</span><span class="v" id="f-loc">…</span></div>
+      <div class="field"><span class="k">WebRTC candidate IPs</span><span class="v" id="f-webrtc">…</span></div>
+      <div class="field"><span class="k">User-Agent (JS)</span><span class="v" id="f-ua">…</span></div>
+      <div class="field"><span class="k">Platform</span><span class="v" id="f-plat">…</span></div>
+      <div class="field"><span class="k">Languages</span><span class="v" id="f-lang">…</span></div>
+      <div class="field"><span class="k">Timezone</span><span class="v" id="f-tz">…</span></div>
+      <div class="field"><span class="k">Screen</span><span class="v" id="f-screen">…</span></div>
+      <div class="field"><span class="k">CPU cores</span><span class="v" id="f-cores">…</span></div>
+      <div class="field"><span class="k">Device memory</span><span class="v" id="f-mem">…</span></div>
+    </div>
+    <div class="btnrow"><button onclick="runBaseline()">↻ Refresh readout</button></div>
+  </div>
+
+  <div class="card">
+    <h2>A · Proxy &amp; IP <span class="tag proxy">needs proxy active</span> <span class="tag strong">strong vector</span></h2>
+    <div class="btnrow">
+      <a class="btn primary" href="https://whoer.net" target="_blank" rel="noopener">whoer.net</a>
+      <a class="btn" href="https://browserleaks.com/ip" target="_blank" rel="noopener">browserleaks/ip</a>
+      <a class="btn" href="https://ipinfo.io" target="_blank" rel="noopener">ipinfo.io</a>
+      <button onclick="openAll(['https://whoer.net','https://browserleaks.com/ip','https://ipinfo.io'])">Open all</button>
+    </div>
+    <p class="what">Pass: IP + country = the proxy's, not yours.</p>
+  </div>
+
+  <div class="card">
+    <h2>B · WebRTC &amp; DNS leaks <span class="tag proxy">needs proxy active</span> <span class="tag strong">strong vector</span></h2>
+    <div class="btnrow">
+      <a class="btn primary" href="https://browserleaks.com/webrtc" target="_blank" rel="noopener">browserleaks/webrtc</a>
+      <a class="btn" href="https://ipleak.net" target="_blank" rel="noopener">ipleak.net</a>
+      <a class="btn" href="https://dnsleaktest.com" target="_blank" rel="noopener">dnsleaktest.com</a>
+      <button onclick="openAll(['https://browserleaks.com/webrtc','https://ipleak.net','https://dnsleaktest.com'])">Open all</button>
+    </div>
+    <p class="what">Pass: no real local/public IP via WebRTC; DNS "Extended test" servers ≠ your ISP.</p>
+  </div>
+
+  <div class="card">
+    <h2>C · Fingerprint spoofing <span class="tag weak">basic — may be flagged</span></h2>
+    <div class="btnrow">
+      <a class="btn primary" href="https://browserleaks.com/javascript" target="_blank" rel="noopener">browserleaks/javascript</a>
+      <a class="btn" href="https://whatismybrowser.com" target="_blank" rel="noopener">whatismybrowser (UA)</a>
+      <a class="btn" href="https://browserleaks.com/canvas" target="_blank" rel="noopener">canvas</a>
+      <a class="btn" href="https://browserleaks.com/webgl" target="_blank" rel="noopener">webgl</a>
+      <a class="btn" href="https://browserleaks.com/geo" target="_blank" rel="noopener">geo</a>
+      <a class="btn" href="https://browserleaks.com/fonts" target="_blank" rel="noopener">fonts</a>
+      <button onclick="openAll(['https://browserleaks.com/javascript','https://browserleaks.com/canvas','https://browserleaks.com/webgl','https://browserleaks.com/geo','https://browserleaks.com/fonts'])">Open all</button>
+    </div>
+    <p class="what">Pass: UA / canvas / WebGL / timezone / geo / fonts all reflect your spoofed values (and match each other).</p>
+  </div>
+
+  <div class="card">
+    <h2>D · Anti-detect reality check <span class="tag weak">honesty test</span></h2>
+    <div class="btnrow">
+      <a class="btn primary" href="https://pixelscan.net" target="_blank" rel="noopener">pixelscan.net</a>
+      <a class="btn" href="https://abrahamjuliot.github.io/creepjs/" target="_blank" rel="noopener">CreepJS</a>
+      <a class="btn" href="https://coveryourtracks.eff.org" target="_blank" rel="noopener">EFF Cover Your Tracks</a>
+      <a class="btn" href="https://browserscan.net" target="_blank" rel="noopener">browserscan.net</a>
+      <a class="btn" href="https://amiunique.org/fingerprint" target="_blank" rel="noopener">amiunique.org</a>
+      <button onclick="openAll(['https://pixelscan.net','https://abrahamjuliot.github.io/creepjs/','https://coveryourtracks.eff.org','https://browserscan.net'])">Open all</button>
+    </div>
+    <p class="what">These actively look for spoofing inconsistencies — expect them to flag the current basic spoofing. Useful to measure how much hardening the Pro tier needs.</p>
+  </div>
+
+  <div class="card">
+    <h2>Checklist <span class="tag weak" id="ck-count"></span></h2>
+    <ul class="check" id="checklist"></ul>
+    <div class="btnrow"><button onclick="resetChecks()">Reset checklist</button></div>
+  </div>
+
+  <p class="foot">ProxyBro QA · run baseline → enable → compare. State is saved in this browser only.</p>
+</div>
+
+<script>
+const CHECKS = [
+  ["ip", "IP + country changed to the proxy's location"],
+  ["webrtc", "No real WebRTC IP leaked (browserleaks/webrtc)"],
+  ["dns", "No DNS leak — Extended test servers are not your ISP"],
+  ["ua", "Custom User-Agent shows in BOTH the request header and JS"],
+  ["canvas", "Canvas signature differs from your baseline"],
+  ["webgl", "WebGL vendor/renderer changed"],
+  ["tz", "Timezone = your set value (and matches the IP country)"],
+  ["geo", "Geolocation returns the fake coordinates"],
+  ["lang", "navigator.language = your set value"],
+  ["hw", "CPU cores / device memory = your set values"],
+  ["consistency", "pixelscan / CreepJS don't scream 'inconsistent / spoofed'"]
+];
+const LS_KEY = "proxybro-leaktest-v1";
+
+function loadState(){ try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e){ return {}; } }
+function saveState(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+
+function renderChecklist(){
+  const state = loadState();
+  const ul = document.getElementById("checklist");
+  ul.innerHTML = "";
+  let done = 0;
+  CHECKS.forEach(([id, label]) => {
+    const li = document.createElement("li");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !!state[id];
+    if (cb.checked) done++;
+    cb.onchange = () => { const s = loadState(); s[id] = cb.checked; saveState(s); renderCount(); };
+    const span = document.createElement("span");
+    span.innerHTML = label;
+    li.appendChild(cb); li.appendChild(span);
+    ul.appendChild(li);
+  });
+  renderCount();
+}
+function renderCount(){
+  const state = loadState();
+  const done = CHECKS.filter(([id]) => state[id]).length;
+  document.getElementById("ck-count").textContent = done + " / " + CHECKS.length + " passed";
+}
+function resetChecks(){ saveState({}); renderChecklist(); }
+
+function openAll(urls){ urls.forEach(u => window.open(u, "_blank", "noopener")); }
+
+function set(id, val){ document.getElementById(id).textContent = val; }
+
+async function runBaseline(){
+  set("f-ua", navigator.userAgent);
+  set("f-plat", navigator.platform);
+  set("f-lang", (navigator.languages || [navigator.language]).join(", "));
+  set("f-tz", Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown");
+  set("f-screen", screen.width + " × " + screen.height);
+  set("f-cores", navigator.hardwareConcurrency || "n/a");
+  set("f-mem", (navigator.deviceMemory ? navigator.deviceMemory + " GB" : "n/a"));
+  set("f-ip", "loading…"); set("f-loc", "loading…");
+  try {
+    const r = await fetch("https://ipwho.is/");
+    const d = await r.json();
+    set("f-ip", d.ip || "unknown");
+    set("f-loc", [d.city, d.country].filter(Boolean).join(", ") || "unknown");
+  } catch(e){ set("f-ip", "fetch blocked"); set("f-loc", "—"); }
+  webrtcProbe();
+}
+
+function webrtcProbe(){
+  const out = document.getElementById("f-webrtc");
+  const ips = new Set();
+  out.textContent = "probing…";
+  let pc;
+  try { pc = new RTCPeerConnection({ iceServers:[{ urls:"stun:stun.l.google.com:19302" }] }); }
+  catch(e){ out.textContent = "RTCPeerConnection blocked (good)"; return; }
+  pc.createDataChannel("x");
+  pc.onicecandidate = (e) => {
+    if (!e.candidate) { out.textContent = ips.size ? [...ips].join(", ") : "none detected (good)"; try{pc.close();}catch(_){} return; }
+    const m = /([0-9]{1,3}(?:\.[0-9]{1,3}){3})|([a-f0-9]{1,4}(?::[a-f0-9]{0,4}){3,})/i.exec(e.candidate.candidate);
+    if (m) { ips.add(m[0]); out.textContent = [...ips].join(", "); }
+  };
+  pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => { out.textContent = "offer failed"; });
+  setTimeout(() => { if (!ips.size) out.textContent = "none detected (good)"; }, 4000);
+}
+
+renderChecklist();
+runBaseline();
+</script>
+</body>
+</html>
