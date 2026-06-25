@@ -154,9 +154,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Creem checkout links + license-validation Worker. Point these at your Creem dashboard
   // product checkout URLs and your deployed Cloudflare Worker. NEVER put the Creem secret
   // API key in the extension — the Worker holds it and validates server-side.
-  // TEST checkout URLs — at go-live swap '/test/payment/' → '/payment/'
-  const CREEM_CHECKOUT_MONTHLY = 'https://www.creem.io/test/payment/prod_25FWlUwzsd4RQTCYyAmPPg';
-  const CREEM_CHECKOUT_YEARLY = 'https://www.creem.io/test/payment/prod_2knvZjhPDhTVgxxzpexprw';
+  // Creem environment flip — the ONLY switch between test and live payments.
+  //   false = TEST  (test-mode checkout + Worker uses CREEM_TEST_API_KEY)
+  //   true  = LIVE  (real money). To go live: set true, fill the live product ids
+  //           below, AND delete CREEM_TEST_API_KEY in Cloudflare. (Plan: live = v1.20.)
+  const CREEM_LIVE = false;
+  const CREEM_CHECKOUT_MONTHLY = CREEM_LIVE
+    ? 'https://www.creem.io/payment/REPLACE_LIVE_MONTHLY'
+    : 'https://www.creem.io/test/payment/prod_25FWlUwzsd4RQTCYyAmPPg';
+  const CREEM_CHECKOUT_YEARLY = CREEM_LIVE
+    ? 'https://www.creem.io/payment/REPLACE_LIVE_YEARLY'
+    : 'https://www.creem.io/test/payment/prod_2knvZjhPDhTVgxxzpexprw';
   const CREEM_VALIDATE_URL = 'https://proxybro.app/validate';
   let selectedPlan = 'monthly';
 
