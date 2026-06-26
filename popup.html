@@ -118,6 +118,9 @@
     .idc-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
     .id-card.active.protected .idc-sub { color: var(--success); }
     .idc-edit { font-size: 11px; color: var(--accent); font-weight: 700; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
+    .idc-lock { font-size: 13px; color: var(--text-muted); padding: 2px 4px; flex-shrink: 0; }
+    .id-card.locked { opacity: 0.6; }
+    .id-card.locked:hover { border-color: var(--border); }
     .sheet-cap { font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 5px; }
     .ed-toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text); padding: 10px 0; border-bottom: 1px solid var(--surface); }
     .sw { width: 36px; height: 20px; border-radius: 999px; background: var(--border-strong); position: relative; cursor: pointer; flex-shrink: 0; }
@@ -724,6 +727,7 @@
         <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text);"><span style="color:var(--success);">&#10003;</span> Advanced fingerprint editor</div>
         <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text);"><span style="color:var(--success);">&#10003;</span> Per-profile spoofing &amp; security</div>
         <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text);"><span style="color:var(--success);">&#10003;</span> Priority updates</div>
+        <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text);"><span style="color:var(--success);">&#10003;</span> Use on up to 5 devices — release one anytime in Settings</div>
       </div>
       <div style="display:flex; gap:6px; background:var(--surface); padding:4px; border-radius:var(--radius-sm); margin-bottom:14px;">
         <div id="planMonthly" style="flex:1; text-align:center; padding:8px 4px; border-radius:6px; background:var(--surface-2); border:1px solid var(--accent); font-size:12px; font-weight:600; color:var(--text); cursor:pointer;">Monthly<br><span style="color:var(--text-muted); font-weight:400;">$5/mo</span></div>

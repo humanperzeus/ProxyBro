@@ -182,7 +182,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (d.proPaidCache) realPaid = true;          // last-known real paid status — instant + offline-safe
       proIsPaid = realPaid;
       if (d.licenseKey && d.licenseInstanceId) setUninstallDeactivate(d.licenseKey, d.licenseInstanceId);
-      updateProUI(); renderProfilesList();
+      updateProUI(); renderProfilesList(); enforceFreeLimit();
+      reValidatePro();   // background re-check; drops to Free if the subscription has lapsed
     });
     setupEventListeners();
     applyDarkMode();
@@ -375,22 +376,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const count = document.getElementById('profileCount');
     if (!list) return;
     if (count) count.textContent = profiles.length;
-    list.innerHTML = profiles.map((p) => {
+    list.innerHTML = profiles.map((p, i) => {
       const active = p.id === activeProfileId;
+      const locked = !proIsPaid && i >= 1; // Free = 1 identity; extras lock until Pro (never deleted)
       const px = p.proxy || proxies.find((x) => x.full === p.proxyFull) || null;
       const missing = !px && !!p.proxyFull;
       let sub;
-      if (active) sub = '<span id="activeStatus">…</span>';
+      if (locked) sub = '<span style="color:var(--text-muted);">Pro — upgrade to use</span>';
+      else if (active) sub = '<span id="activeStatus">…</span>';
       else if (missing) sub = '<span style="color:var(--danger);">proxy missing — tap edit</span>';
       else sub = diagEscape(p.country || (px && px.country) || (px ? 'proxy set' : 'no proxy'));
-      return '<div class="id-card' + (active ? ' active' : '') + '"' + (active ? ' id="activeCard"' : '') + ' data-id="' + p.id + '">' +
+      return '<div class="id-card' + (active ? ' active' : '') + (locked ? ' locked' : '') + '"' + (active ? ' id="activeCard"' : '') + ' data-id="' + p.id + '"' + (locked ? ' data-locked="1"' : '') + '>' +
         '<span class="idc-cc">' + diagEscape(ccBadge(p)) + '</span>' +
         '<div class="idc-text"><div class="idc-name">' + diagEscape(p.name) + '</div><div class="idc-sub">' + sub + '</div></div>' +
-        '<span class="idc-edit" data-edit="' + p.id + '">edit</span>' +
+        (locked ? '<span class="idc-lock" title="Pro">🔒</span>' : '<span class="idc-edit" data-edit="' + p.id + '">edit</span>') +
         '</div>';
     }).join('');
     list.querySelectorAll('.id-card').forEach((row) => {
       row.addEventListener('click', () => {
+        if (row.dataset.locked) { gatedShowPaywall(); return; } // locked Pro identity → upgrade
         const p = profiles.find((x) => x.id === row.dataset.id);
         if (!p) return;
         if (p.id === activeProfileId) updateHome(true); // re-check the active identity
@@ -899,6 +903,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const up = document.getElementById('settingsUpgrade'); if (up) up.style.display = proIsPaid ? 'none' : '';
     const rel = document.getElementById('releaseLicenseRow'); if (rel) rel.style.display = realPaid ? 'flex' : 'none';
   }
+
+  // Background re-check (max once / 12h). Drops to Free ONLY on a definitive "not active" from the
+  // server (cancelled/expired subscription); network errors keep the cached Pro state (offline-safe).
+  // Uses Creem's read-only validate, so it consumes no activation slot.
+  async function reValidatePro() {
+    const s = await new Promise((res) => chrome.storage.local.get(['proPaidCache', 'licenseKey', 'licenseInstanceId', 'lastValidated'], res));
+    if (!s || !s.proPaidCache || !s.licenseKey || !s.licenseInstanceId) return;
+    if (Date.now() - (s.lastValidated || 0) < 12 * 3600 * 1000) return;
+    try {
+      const r = await fetch(CREEM_VALIDATE_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: s.licenseKey, instanceId: s.licenseInstanceId, recheck: true })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (d && d.valid === true) {
+        chrome.storage.local.set({ lastValidated: Date.now() });
+      } else if (d && d.valid === false) {
+        realPaid = false; proIsPaid = false;
+        chrome.storage.local.remove(['proPaidCache', 'licenseKey', 'licenseInstanceId', 'lastValidated']);
+        setUninstallDeactivate('', '');
+        updateProUI(); renderProfilesList(); enforceFreeLimit();
+      }
+    } catch (e) { /* keep cached Pro state on a network error */ }
+  }
+
+  // Free = 1 identity. If a now-locked (Pro) identity is still active, fall back to the first
+  // identity so a Free user can't keep using a Pro proxy.
+  function enforceFreeLimit() {
+    if (proIsPaid) return;
+    const active = getActiveProfile();
+    const idx = active ? profiles.findIndex((p) => p.id === active.id) : -1;
+    if (idx >= 1 && profiles[0]) applyProfile(profiles[0]);
+  }
   function setUninstallDeactivate(key, instanceId) {
     // On uninstall Chrome opens this URL → the Worker frees this device's Creem slot, so a
     // reinstall never burns an activation. Cleared when the license is released.
@@ -1041,7 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (d && d.valid) {
           realPaid = true;
           const instId = d.instanceId || installId;
-          chrome.storage.local.set({ proPaidCache: true, licenseKey: key, licenseInstanceId: instId });
+          chrome.storage.local.set({ proPaidCache: true, licenseKey: key, licenseInstanceId: instId, lastValidated: Date.now() });
           setUninstallDeactivate(key, instId);
           proIsPaid = true;
           updateProUI(); renderProfilesList(); hidePaywall();
