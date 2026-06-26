@@ -29,3 +29,5 @@ Thumbs.db
 .preview-server.js
 .claude/launch.json
 redesign-mockup.html
+# Cloudflare wrangler local cache
+.wrangler/
