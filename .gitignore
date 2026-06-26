@@ -31,3 +31,5 @@ Thumbs.db
 redesign-mockup.html
 # Cloudflare wrangler local cache
 .wrangler/
+# Local AI session context (machine-specific paths; not for the public repo)
+CLAUDE.md
