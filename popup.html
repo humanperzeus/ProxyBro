@@ -267,6 +267,8 @@
     .notification.success { background: var(--success); }
     .notification.error { background: var(--danger); }
     .notification.info { background: var(--accent); }
+    .fb-cat { padding:4px 11px; border-radius:999px; background:var(--surface); border:1px solid var(--surface-2); color:var(--text-muted); font-size:12px; cursor:pointer; }
+    .fb-cat.on { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
     @keyframes slideIn { from { transform: translateX(120%); } to { transform: translateX(0); } }
     @keyframes slideOut { from { transform: translateX(0); } to { transform: translateX(120%); } }
 
@@ -702,6 +704,7 @@
       <a class="set-row" href="https://proxybro.app/#privacy" target="_blank"><span class="ic">⛉</span>Privacy policy<span class="chev">›</span></a>
       <a class="set-row" href="https://proxybro.app/#terms" target="_blank"><span class="ic">▤</span>Terms of service<span class="chev">›</span></a>
       <a class="set-row" href="https://proxybro.app/#faq" target="_blank"><span class="ic">✉</span>Help &amp; support<span class="chev">›</span></a>
+      <div class="set-row" data-act="feedback"><span class="ic">✎</span>Send feedback<span class="chev">›</span></div>
       <a class="set-row" href="https://proxybro.app" target="_blank"><span class="ic">ⓘ</span>About ProxyBro<span class="chev">›</span></a>
       <div class="set-about">ProxyBro <span id="versionFooter"></span> · made by <a href="https://humanperzeus.com" target="_blank" style="color:var(--accent);">humanperzeus</a></div>
     </div>
@@ -710,6 +713,48 @@
       <a class="bn on" data-nav="home"><b>◎</b>Home</a>
       <a class="bn" data-nav="diagnostics"><b>◈</b>Diagnostics</a>
       <a class="bn" data-nav="settings"><b>⚙</b>Settings</a>
+    </div>
+  </div>
+
+  <div id="ratingOverlay" style="display:none; position:fixed; inset:0; z-index:9998; background:var(--bg); padding:18px; box-sizing:border-box; overflow-y:auto;">
+    <div style="max-width:340px; margin:24px auto;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:18px;">
+        <span style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:var(--surface);">★</span>
+        <span style="font-size:12px; color:var(--text-muted);">ProxyBro</span>
+        <span id="ratingClose" style="margin-left:auto; font-size:20px; color:var(--text-muted); cursor:pointer; line-height:1;">&times;</span>
+      </div>
+
+      <div id="ratingAsk">
+        <div style="font-size:20px; font-weight:700; line-height:1.3; margin-bottom:6px; color:var(--text);">How's ProxyBro working out?</div>
+        <div style="font-size:13px; color:var(--text-muted); line-height:1.6; margin-bottom:18px;">Your honest take helps a lot — it stays between you and us.</div>
+        <div style="display:flex; gap:10px;">
+          <button id="ratingLove" style="flex:1; padding:13px 8px; background:var(--surface-2); color:var(--text); border:1px solid var(--accent); border-radius:var(--radius-sm); font-size:14px; font-weight:600; cursor:pointer;">👍 Love it</button>
+          <button id="ratingMeh" style="flex:1; padding:13px 8px; background:var(--surface); color:var(--text); border:1px solid var(--surface-2); border-radius:var(--radius-sm); font-size:14px; font-weight:600; cursor:pointer;">👎 Could be better</button>
+        </div>
+        <div id="ratingLater" style="text-align:center; margin-top:14px; font-size:13px; color:var(--text-muted); cursor:pointer;">Maybe later</div>
+      </div>
+
+      <div id="ratingForm" style="display:none;">
+        <div style="font-size:20px; font-weight:700; line-height:1.3; margin-bottom:6px; color:var(--text);">What's not working?</div>
+        <div style="font-size:13px; color:var(--text-muted); line-height:1.6; margin-bottom:13px;">Tell us what's wrong — we read every note and fix fast.</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:11px;">
+          <span class="fb-cat" data-cat="Bug">Bug</span>
+          <span class="fb-cat" data-cat="Proxy issue">Proxy issue</span>
+          <span class="fb-cat" data-cat="Fingerprint">Fingerprint</span>
+          <span class="fb-cat" data-cat="Pricing">Pricing</span>
+          <span class="fb-cat" data-cat="Other">Other</span>
+        </div>
+        <textarea id="fbMessage" placeholder="What went wrong?" style="width:100%; min-height:80px; padding:10px 11px; margin-bottom:8px; font-size:13px; box-sizing:border-box; resize:vertical;"></textarea>
+        <input type="email" id="fbContact" placeholder="Email (optional — only if you want a reply)" style="width:100%; padding:10px 11px; margin-bottom:11px; font-size:13px; box-sizing:border-box;">
+        <button id="fbSend" style="width:100%; padding:13px; background:var(--text); color:var(--bg); border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:700; cursor:pointer;">Send feedback</button>
+      </div>
+
+      <div id="ratingThanks" style="display:none; text-align:center; padding:18px 0;">
+        <div style="font-size:32px; margin-bottom:8px;">🙏</div>
+        <div style="font-size:18px; font-weight:700; color:var(--text); margin-bottom:6px;">Thank you</div>
+        <div style="font-size:13px; color:var(--text-muted); line-height:1.6;">We read every note and use it to make ProxyBro better.</div>
+        <div id="thanksClose" style="margin-top:18px; font-size:13px; color:var(--accent); cursor:pointer;">Close</div>
+      </div>
     </div>
   </div>
 

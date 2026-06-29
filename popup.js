@@ -146,6 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeProfileId = null;
   let editingProxyId = null;
   let proIsPaid = false;
+  let feedbackSource = 'rating_prompt', feedbackCategory = '';
   // Auto-fingerprint diversity: 'windows' = vary within a Windows pool (safest, most common
   // match); 'diverse' = also roll macOS/Linux per identity (more real-world spread, more
   // fields that must stay coherent). User-selectable in the Advanced sheet; persisted.
@@ -160,6 +161,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const CREEM_CHECKOUT_MONTHLY = 'https://proxybro.app/buy?plan=monthly';
   const CREEM_CHECKOUT_YEARLY = 'https://proxybro.app/buy?plan=yearly';
   const CREEM_VALIDATE_URL = 'https://proxybro.app/validate';
+  const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj';
+  const FEEDBACK_URL = 'https://proxybro.app/feedback';
   let selectedPlan = 'monthly';
 
   // User-Agent templates - will be loaded from external file
@@ -189,6 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyDarkMode();
     loadUserAgentTemplates();
     updateHome();
+    maybeShowRatingPrompt();   // v1.20: ask happy users to rate, route unhappy to private feedback
   }
 
   // Show the loaded build straight from the manifest so it can never drift.
@@ -948,7 +952,95 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {}
   }
+  // ---- v1.20: in-app rating prompt + feedback funnel ----
+  function getRatingState() { return new Promise((res) => chrome.storage.local.get(['ratingState'], (d) => res((d && d.ratingState) || {}))); }
+  function setRatingState(s) { chrome.storage.local.set({ ratingState: s }); }
+
+  // Surface the prompt only after a positive milestone (2nd identity OR >=3 distinct active days),
+  // at most 3 times, never while snoozed, never stacked on the paywall.
+  async function maybeShowRatingPrompt() {
+    const s = await getRatingState();
+    if (s.done) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const days = Array.isArray(s.days) ? s.days.slice(-30) : [];
+    if (!days.includes(today)) days.push(today);
+    setRatingState({ ...s, days });
+    const eligible = (profiles.length >= 2 || days.length >= 3);
+    const snoozed = s.snoozeUntil && Date.now() < s.snoozeUntil;
+    if (!eligible || snoozed || (s.asked || 0) >= 3) return;
+    setTimeout(() => {
+      const pw = document.getElementById('paywallOverlay');
+      if (pw && pw.style.display === 'block') return; // never on top of the paywall
+      showRatingPrompt();
+    }, 1000);
+  }
+
+  function showRatingPrompt() {
+    const o = document.getElementById('ratingOverlay'); if (!o) return;
+    document.getElementById('ratingAsk').style.display = 'block';
+    document.getElementById('ratingForm').style.display = 'none';
+    document.getElementById('ratingThanks').style.display = 'none';
+    o.style.display = 'block';
+    getRatingState().then((s) => setRatingState({ ...s, asked: (s.asked || 0) + 1, snoozeUntil: Date.now() + 2 * 864e5 }));
+  }
+
+  function hideRatingPrompt() { const o = document.getElementById('ratingOverlay'); if (o) o.style.display = 'none'; }
+  async function ratingSnooze() { const s = await getRatingState(); setRatingState({ ...s, snoozeUntil: Date.now() + 7 * 864e5 }); hideRatingPrompt(); }
+  async function ratingDone() { const s = await getRatingState(); setRatingState({ ...s, done: true }); }
+
+  function openStoreReview() {
+    chrome.tabs.create({ url: CHROME_STORE_URL + '?utm_source=extension&utm_medium=popup&utm_campaign=get_extension&utm_content=rating_prompt' });
+    ratingDone(); hideRatingPrompt();
+  }
+
+  function showFeedbackForm(source) {
+    feedbackSource = source || 'rating_prompt';
+    feedbackCategory = '';
+    document.querySelectorAll('.fb-cat').forEach((c) => c.classList.remove('on'));
+    const msg = document.getElementById('fbMessage'); if (msg) msg.value = '';
+    const o = document.getElementById('ratingOverlay'); if (!o) return;
+    document.getElementById('ratingAsk').style.display = 'none';
+    document.getElementById('ratingThanks').style.display = 'none';
+    document.getElementById('ratingForm').style.display = 'block';
+    o.style.display = 'block';
+  }
+
+  async function submitFeedback() {
+    const msgEl = document.getElementById('fbMessage');
+    const message = ((msgEl && msgEl.value) || '').trim();
+    if (!message) { showNotification('Type a message first', 'error'); return; }
+    const contactEl = document.getElementById('fbContact');
+    const contact = (contactEl && contactEl.value) || '';
+    const sendBtn = document.getElementById('fbSend');
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
+    try {
+      const r = await fetch(FEEDBACK_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message.slice(0, 4000), category: feedbackCategory, contact: contact.slice(0, 200), source: feedbackSource, appVersion: chrome.runtime.getManifest().version })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (d && d.ok) {
+        await ratingDone();
+        document.getElementById('ratingForm').style.display = 'none';
+        document.getElementById('ratingThanks').style.display = 'block';
+      } else { showNotification('Could not send — please try again', 'error'); }
+    } catch (e) { showNotification('Could not reach the server', 'error'); }
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send feedback'; }
+  }
+
   function setupEventListeners() {
+    const _byId = (id) => document.getElementById(id);
+    if (_byId('ratingLove')) _byId('ratingLove').addEventListener('click', openStoreReview);
+    if (_byId('ratingMeh')) _byId('ratingMeh').addEventListener('click', () => showFeedbackForm('rating_prompt'));
+    if (_byId('ratingLater')) _byId('ratingLater').addEventListener('click', ratingSnooze);
+    if (_byId('ratingClose')) _byId('ratingClose').addEventListener('click', ratingSnooze);
+    if (_byId('fbSend')) _byId('fbSend').addEventListener('click', submitFeedback);
+    if (_byId('thanksClose')) _byId('thanksClose').addEventListener('click', hideRatingPrompt);
+    document.querySelectorAll('.fb-cat').forEach((c) => c.addEventListener('click', () => {
+      document.querySelectorAll('.fb-cat').forEach((x) => x.classList.remove('on'));
+      c.classList.add('on'); feedbackCategory = c.dataset.cat || '';
+    }));
+    document.querySelectorAll('.set-row[data-act="feedback"]').forEach((r) => r.addEventListener('click', () => showFeedbackForm('settings')));
     // showScreen / updateProUI / setUninstallDeactivate are hoisted to top level (above).
     document.querySelectorAll('.bn').forEach(b => b.addEventListener('click', () => showScreen(b.dataset.nav)));
     document.querySelectorAll('.sub-back').forEach(b => b.addEventListener('click', () => openAdvanced()));
