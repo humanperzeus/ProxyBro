@@ -269,6 +269,11 @@
     .notification.info { background: var(--accent); }
     .fb-cat { padding:4px 11px; border-radius:999px; background:var(--surface); border:1px solid var(--surface-2); color:var(--text-muted); font-size:12px; cursor:pointer; }
     .fb-cat.on { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+    .ref-card { position:relative; background:#0e1626; border:1px solid #1e3a5f; border-radius:10px; padding:11px 12px; margin-top:10px; }
+    .ref-x { position:absolute; top:6px; right:9px; color:var(--text-muted); cursor:pointer; font-size:16px; line-height:1; }
+    .ref-title { font-weight:700; font-size:13px; color:var(--text); padding-right:14px; }
+    .ref-text { color:var(--text-muted); font-size:11.5px; line-height:1.45; margin-top:3px; }
+    .ref-btn { width:100%; margin-top:9px; background:var(--accent); color:#fff; border:none; border-radius:8px; padding:8px; font-weight:600; font-size:12px; cursor:pointer; }
     @keyframes slideIn { from { transform: translateX(120%); } to { transform: translateX(0); } }
     @keyframes slideOut { from { transform: translateX(0); } to { transform: translateX(120%); } }
 
@@ -292,6 +297,7 @@
       <div id="goDirectWrap" style="text-align:center; margin-top:10px; display:none;">
         <span id="goDirectLink" style="font-size:12px; color:var(--text-muted); cursor:pointer;">Turn off — use your real IP</span>
       </div>
+      <div id="referralSlot"></div>
     </div>
 
     <div class="tab-content" id="proxies-tab">

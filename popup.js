@@ -163,6 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const CREEM_VALIDATE_URL = 'https://proxybro.app/validate';
   const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj';
   const FEEDBACK_URL = 'https://proxybro.app/feedback';
+  const CONFIG_URL = 'https://proxybro.app/config';
+  const GO_BASE = 'https://proxybro.app/go/';
   let selectedPlan = 'monthly';
 
   // User-Agent templates - will be loaded from external file
@@ -193,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadUserAgentTemplates();
     updateHome();
     maybeShowRatingPrompt();   // v1.20: ask happy users to rate, route unhappy to private feedback
+    loadReferrals();           // v1.21: data-driven referral cards (flag-gated, dismissible)
   }
 
   // Show the loaded build straight from the manifest so it can never drift.
@@ -952,6 +955,30 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {}
   }
+  // ---- v1.21: data-driven referral cards (Cloudflare REFERRAL flag + REFERRALS array, via /config) ----
+  function refEscape(s) { const d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+  function getRefDismissed() { return new Promise((res) => chrome.storage.local.get(['referralDismissed'], (d) => res((d && d.referralDismissed) || []))); }
+  async function dismissReferral(id) { const d = await getRefDismissed(); if (d.indexOf(id) === -1) { d.push(id); chrome.storage.local.set({ referralDismissed: d }); } }
+  async function loadReferrals() {
+    const slot = document.getElementById('referralSlot');
+    if (!slot) return;
+    let cfg = null;
+    try { const r = await fetch(CONFIG_URL); cfg = await r.json(); } catch (e) { return; }
+    slot.innerHTML = '';
+    if (!cfg || cfg.referral !== true || !Array.isArray(cfg.referrals) || !cfg.referrals.length) return;
+    const dismissed = await getRefDismissed();
+    cfg.referrals.forEach((ref) => {
+      if (!ref || !ref.id || dismissed.indexOf(ref.id) > -1) return;
+      const card = document.createElement('div');
+      card.className = 'ref-card';
+      card.innerHTML = '<span class="ref-x">&times;</span><div class="ref-title">' + refEscape(ref.title || 'Recommended') +
+        '</div><div class="ref-text">' + refEscape(ref.text || '') + '</div><button class="ref-btn">' + refEscape(ref.button || 'Learn more') + ' &rarr;</button>';
+      card.querySelector('.ref-btn').addEventListener('click', () => chrome.tabs.create({ url: GO_BASE + encodeURIComponent(ref.id) }));
+      card.querySelector('.ref-x').addEventListener('click', () => { card.remove(); dismissReferral(ref.id); });
+      slot.appendChild(card);
+    });
+  }
+
   // ---- v1.20: in-app rating prompt + feedback funnel ----
   function getRatingState() { return new Promise((res) => chrome.storage.local.get(['ratingState'], (d) => res((d && d.ratingState) || {}))); }
   function setRatingState(s) { chrome.storage.local.set({ ratingState: s }); }
