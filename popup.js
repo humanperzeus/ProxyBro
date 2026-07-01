@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let r = await fetchVia('https://www.cloudflare.com/cdn-cgi/trace', 8000);
     if (r) { try { const t = await r.text(); const ipm = t.match(/(?:^|\n)ip=([^\n]+)/); const locm = t.match(/(?:^|\n)loc=([^\n]+)/); if (ipm) return { ok: true, ip: ipm[1].trim(), country: locm ? locm[1].trim() : null, city: null }; } catch (e) {} }
     r = await fetchVia('https://ipwho.is/', 15000);
-    if (r) { try { const d = await r.json(); if (d && d.ip) return { ok: true, ip: d.ip, country: d.country, city: d.city }; } catch (e) {} }
+    if (r) { try { const d = await r.json(); if (d && d.ip) return { ok: true, ip: d.ip, country: d.country_code || d.country, city: d.city }; } catch (e) {} }
     // Smaller/faster endpoint — usually returns the IP even on slow proxies (no geo).
     r = await fetchVia('https://api.ipify.org?format=json', 12000);
     if (r) { try { const d = await r.json(); if (d && d.ip) return { ok: true, ip: d.ip, country: null, city: null }; } catch (e) {} }
@@ -303,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (sc) sc.textContent = 'Checking…';
       exit = await probeExit();
       const rtc = await webrtcProbe();
-      rtcLeak = rtc.length > 0;
+      rtcLeak = !!(rtc.ips && rtc.ips.some(function (ip) { return isPublicIp(ip) && ip !== exit.ip; }));
       setHomeCache({ profileId: activeProfileId, exit: exit, rtcLeak: rtcLeak, ts: Date.now() });
     }
 
@@ -313,6 +313,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // carrying traffic, the exit responding, AND WebRTC not leaking the real IP.
     const live = await getLiveProxyConfig();
     const proxyOn = live.on;
+    // Capture the real IP as a baseline whenever protection is genuinely OFF — Diagnostics uses it to
+    // show "real X -> proxy Y". Only ever store a non-proxied probe (never the proxy's own IP).
+    if (!proxyOn && exit.ok && exit.ip) chrome.storage.local.set({ realIpBaseline: { ip: exit.ip, country: exit.country || '', ts: Date.now() } });
     const isProtected = proxyOn && exit.ok && !rtcLeak;
     const sEl = document.getElementById('activeStatus');
     const cEl = document.getElementById('activeCard');
@@ -329,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dw) dw.style.display = 'block';
     } else if (proxyOn && !exit.ok) {
       if (cEl) cEl.classList.remove('protected');
-      if (sEl) sEl.textContent = 'Proxy slow — tap to re-check';
+      if (sEl) sEl.textContent = 'Proxy not responding — down or blocked by this network · tap to retry';
       if (dw) dw.style.display = 'block';
     } else {
       if (cEl) cEl.classList.remove('protected');
@@ -752,7 +755,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function goDirect() {
     deactivateProxy();
-    chrome.runtime.sendMessage({ action: 'updateSpoofingSettings', settings: JSON.parse(JSON.stringify(DEFAULT_SPOOF)) });
+    // Going direct = back to your REAL identity: reset BOTH the fingerprint AND the security/WebRTC
+    // settings, and PERSIST them (getSpoofingForDiag reads storage; the WebRTC check reads the live
+    // policy). Without the security reset, "protection off" still left WebRTC blocked — which reads as
+    // protection while your real IP is exposed. Re-activating any identity restores both.
+    const realSpoof = JSON.parse(JSON.stringify(DEFAULT_SPOOF));
+    const realSecurity = JSON.parse(JSON.stringify(DEFAULT_SECURITY));
+    spoofingSettings = realSpoof;
+    securitySettings = realSecurity;
+    chrome.storage.local.set({ spoofingSettings: realSpoof, securitySettings: realSecurity });
+    chrome.runtime.sendMessage({ action: 'updateSpoofingSettings', settings: realSpoof });
+    chrome.runtime.sendMessage({ action: 'updateSecuritySettings', settings: realSecurity });
     showNotification('Protection off — real identity', 'info');
     setTimeout(() => updateHome(true), 1200);
   }
@@ -766,6 +779,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // does NOT apply to extension pages, so a popup-side probe always "leaks" even when
   // real sites are fully protected — a false positive. Injecting into the page measures
   // what actual websites see.
+  // Public IP test (v4 + v6) — separates a REAL WebRTC leak from harmless private/link-local candidates.
+  function isPublicIp(ip) {
+    if (!ip) return false;
+    if (ip.indexOf(':') > -1) { var l = ip.toLowerCase(); return !(l.indexOf('fe80') === 0 || l.indexOf('fc') === 0 || l.indexOf('fd') === 0 || l === '::1' || l === '::'); }
+    var p = ip.split('.').map(Number);
+    if (p.length !== 4 || p.some(function (n) { return isNaN(n); })) return false;
+    if (p[0] === 10 || p[0] === 127 || (p[0] === 192 && p[1] === 168) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) || (p[0] === 169 && p[1] === 254)) return false;
+    return true;
+  }
+  // Country of a spoofed timezone (common IANA zones) + region of a language tag ('en-US' -> 'US').
+  var TZ_COUNTRY = { 'America/New_York':'US','America/Chicago':'US','America/Denver':'US','America/Los_Angeles':'US','America/Phoenix':'US','America/Anchorage':'US','America/Toronto':'CA','America/Vancouver':'CA','America/Mexico_City':'MX','America/Sao_Paulo':'BR','America/Argentina/Buenos_Aires':'AR','Europe/London':'GB','Europe/Berlin':'DE','Europe/Paris':'FR','Europe/Madrid':'ES','Europe/Rome':'IT','Europe/Amsterdam':'NL','Europe/Zurich':'CH','Europe/Vienna':'AT','Europe/Stockholm':'SE','Europe/Oslo':'NO','Europe/Copenhagen':'DK','Europe/Warsaw':'PL','Europe/Moscow':'RU','Europe/Dublin':'IE','Europe/Brussels':'BE','Europe/Lisbon':'PT','Europe/Helsinki':'FI','Europe/Prague':'CZ','Europe/Athens':'GR','Europe/Bucharest':'RO','Europe/Kyiv':'UA','Europe/Istanbul':'TR','Asia/Tokyo':'JP','Asia/Shanghai':'CN','Asia/Hong_Kong':'HK','Asia/Singapore':'SG','Asia/Seoul':'KR','Asia/Kolkata':'IN','Asia/Dubai':'AE','Asia/Bangkok':'TH','Asia/Jakarta':'ID','Asia/Manila':'PH','Asia/Jerusalem':'IL','Australia/Sydney':'AU','Australia/Melbourne':'AU','Australia/Perth':'AU','Pacific/Auckland':'NZ','Africa/Johannesburg':'ZA','Africa/Cairo':'EG','Africa/Lagos':'NG' };
+  function tzCountry(tz) { return (tz && TZ_COUNTRY[tz]) || ''; }
+  function langRegion(l) { var m = /[-_]([A-Za-z]{2})\b/.exec(l || ''); return m ? m[1].toUpperCase() : ''; }
+  function normCC(c) { c = (c || '').trim(); return c.length === 2 ? c.toUpperCase() : ''; }
   function webrtcProbe() {
     return new Promise((resolve) => {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -781,8 +808,8 @@ document.addEventListener('DOMContentLoaded', () => {
             try { pc.createDataChannel('x'); } catch (e) {}
             pc.onicecandidate = (e) => {
               if (!e.candidate) { try { pc.close(); } catch (_) {} res([...ips]); return; }
-              const m = /([0-9]{1,3}(?:\.[0-9]{1,3}){3})/.exec(e.candidate.candidate);
-              if (m && !m[1].startsWith('0.')) ips.add(m[1]);
+              const addr = (e.candidate.candidate || '').split(' ')[4]; // connection address, v4 or v6
+              if (addr && !/\.local$/i.test(addr) && addr.indexOf('0.') !== 0 && (/^[0-9.]+$/.test(addr) || addr.indexOf(':') > -1)) ips.add(addr);
             };
             pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => res([]));
             setTimeout(() => { try { pc.close(); } catch (_) {} res([...ips]); }, 4000);
@@ -827,29 +854,54 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.proxy.settings.get({}, (s) => {
           const v = s && s.value, sp = v && v.rules && v.rules.singleProxy;
           if (v && v.mode === 'fixed_servers' && sp && sp.host) {
-            resolve({ on: true, host: sp.host, port: String(sp.port == null ? '' : sp.port) });
+            resolve({ on: true, host: sp.host, port: String(sp.port == null ? '' : sp.port), scheme: (sp.scheme || 'http') });
           } else {
-            resolve({ on: false, host: '', port: '' });
+            resolve({ on: false, host: '', port: '', scheme: '' });
           }
         });
-      } catch (e) { resolve({ on: false, host: '', port: '' }); }
+      } catch (e) { resolve({ on: false, host: '', port: '', scheme: '' }); }
     });
   }
   async function measureDiagnostics() {
     const exit = await probeExit();
-    const webrtcProtected = await webrtcConfigStatus();
+    const webrtcCfg = await webrtcConfigStatus();      // policy flag — fallback when there's no page to probe
+    const rtc = await webrtcProbe();                   // real STUN probe from the active web page (v4 + v6)
+    const webrtcTested = !!(rtc && rtc.ips);           // false when there's no active http(s) tab to probe
     const s = await getSpoofingForDiag();
     const ua = !!s.userAgent, canvas = !!(s.canvasMode && s.canvasMode !== 'real'), webgl = !!(s.webglMode && s.webglMode !== 'real'), tz = s.timezoneMode === 'manual', lang = s.languageMode === 'manual';
     const vectors = [ua, canvas, webgl, tz, lang];
     const faked = vectors.filter(Boolean).length;
+    // Timezone/language COHERENCE: does the SPOOFED value's country match the proxy's exit country? A
+    // spoofed tz/lang pointing at a different country than the proxy is a TELL, not protection.
+    const exitCC = normCC(exit.country);
+    const tzCC = tz ? tzCountry(s.timezone) : '';
+    const langCC = lang ? langRegion(s.language) : '';
+    const tzCoherent = tz && !!exitCC && !!tzCC && tzCC === exitCC;
+    const tzMismatch = tz && !!exitCC && !!tzCC && tzCC !== exitCC;
+    const langCoherent = lang && !!exitCC && !!langCC && langCC === exitCC;
+    const langMismatch = lang && !!exitCC && !!langCC && langCC !== exitCC;
     const os = s.userAgent && /Windows/i.test(s.userAgent) ? 'Windows' : (s.userAgent && /Mac/i.test(s.userAgent) ? 'macOS' : (s.userAgent && /Linux|X11/i.test(s.userAgent) ? 'Linux' : 'Auto'));
     // The IP is only "masked" when a proxy is REALLY carrying traffic. exit.ok alone is true even
     // with the proxy OFF (the probe just returns the REAL IP), and our stored activeProxy flag can go
     // stale after an update / SW restart / Pro->Free drop. Read Chrome's LIVE proxy config as the
     // ground truth — this is the fix for "Fully protected 7/7 while the proxy is off".
     const live = await getLiveProxyConfig();
+    const baseline = await getRealIpBaseline();
     const ipMasked = live.on && !!exit.ok;
-    const score = [ipMasked, webrtcProtected].concat(vectors).filter(Boolean).length;
+    const proxyIp = exit.ip || '';
+    // Real WebRTC result: a leak that MATTERS is a public IP that isn't the proxy exit -> your real IP is
+    // discoverable via WebRTC even when HTTP is proxied. No page to probe -> fall back to the policy flag.
+    const webrtcLeaked = webrtcTested ? rtc.ips.filter(isPublicIp) : [];
+    const webrtcRealLeak = webrtcLeaked.some(function (ip) { return ip !== proxyIp; });
+    const webrtcProtected = webrtcTested ? !webrtcRealLeak : webrtcCfg;
+    // DNS: scheme heuristic. HTTP/HTTPS/SOCKS5 resolve DNS proxy-side; SOCKS4 has no remote DNS so
+    // queries hit your local resolver -> a DNS leak. IPv6: a real IPv6 via WebRTC = v6 discoverable.
+    const scheme = (live.scheme || '').toLowerCase();
+    const dnsLeak = ipMasked && scheme === 'socks4';
+    const ipv6Exposed = webrtcLeaked.some(function (ip) { return ip.indexOf(':') > -1 && ip !== proxyIp; });
+    // IP masking is the GATE. If your real IP is exposed, a spoofed fingerprint / blocked WebRTC do
+    // NOT protect you (you're identified by the IP), so the score is 0 — never "6/7 while exposed".
+    const score = (ipMasked && !webrtcRealLeak) ? Math.max(0, [ipMasked, webrtcProtected, ua, canvas, webgl, (tz && !tzMismatch), (lang && !langMismatch)].filter(Boolean).length - (dnsLeak ? 1 : 0)) : 0;
     // The 7 that make the score, then 'extra' hardening shown only in the expert view.
     const detail = [
       { label: 'Exit IP masked by proxy', ok: ipMasked },
@@ -857,45 +909,59 @@ document.addEventListener('DOMContentLoaded', () => {
       { label: 'User-Agent spoofed', ok: ua },
       { label: 'Canvas randomised', ok: canvas },
       { label: 'WebGL randomised', ok: webgl },
-      { label: 'Timezone matches proxy', ok: tz },
-      { label: 'Language matches proxy', ok: lang },
+      { label: 'Timezone matches proxy', ok: (tz && !tzMismatch) },
+      { label: 'Language matches proxy', ok: (lang && !langMismatch) },
       { label: 'GPU model spoofed', ok: s.webglInfoMode === 'manual', extra: true },
       { label: 'Screen size set', ok: s.screenMode === 'manual', extra: true },
       { label: 'CPU cores set', ok: s.cpuMode === 'manual', extra: true },
       { label: 'Device memory set', ok: s.memoryMode === 'manual', extra: true },
       { label: 'Do Not Track on', ok: !!s.doNotTrack, extra: true }
     ];
-    return { ts: Date.now(), ipMasked: ipMasked, exitOk: !!exit.ok, exitIp: exit.ip || '', exitCountry: exit.country || '', webrtcProtected: webrtcProtected, fpCoherent: faked >= 3, fpOs: os, fpFaked: faked, score: score, detail: detail };
+    return { ts: Date.now(), ipMasked: ipMasked, exitOk: !!exit.ok, exitIp: exit.ip || '', exitCountry: exit.country || '', proxyIp: exit.ip || '', proxyCountry: exit.country || '', realIp: baseline ? baseline.ip : '', realCountry: baseline ? (baseline.country || '') : '', realTs: baseline ? baseline.ts : 0, webrtcProtected: webrtcProtected, webrtcRealLeak: webrtcRealLeak, webrtcLeakedIp: webrtcLeaked[0] || '', webrtcTested: webrtcTested, scheme: scheme, dnsLeak: dnsLeak, ipv6Exposed: ipv6Exposed, tzMatched: tz, langMatched: lang, tzCoherent: tzCoherent, tzMismatch: tzMismatch, tzCC: tzCC, langCoherent: langCoherent, langMismatch: langMismatch, langCC: langCC, exitCC: exitCC, fpCoherent: faked >= 3, fpOs: os, fpFaked: faked, score: score, detail: detail };
   }
   let diagDetail = false;
-  function diagVerdict(score) {
-    return score >= 7 ? 'Fully protected' : (score >= 5 ? 'Well protected' : (score >= 3 ? 'Partly protected' : 'Exposed'));
-  }
   function renderDiagCards(el, c) {
-    // If the IP isn't masked (proxy off / dead), the real IP is exposed — that's the dominant fact, so
-    // the verdict is "Exposed" no matter how good the fingerprint is. Never claim "protected" while the
-    // real IP is showing. Backward-compatible: old caches without ipMasked fall back to exitOk.
+    // Ground truth (from 1.21.1): if the IP isn't masked (proxy off/dead), the real IP is exposed and
+    // the verdict is "Exposed" no matter how good the fingerprint is. Old caches w/o ipMasked -> exitOk.
     const ipMasked = (c.ipMasked !== undefined) ? c.ipMasked : c.exitOk;
-    const exposed = !ipMasked;
-    const verdict = exposed ? 'Exposed' : diagVerdict(c.score);
-    const sCls = exposed ? 'bad' : (c.score >= 6 ? 'ok' : (c.score >= 4 ? 'warn' : 'bad'));
-    const sVar = sCls === 'ok' ? 'success' : (sCls === 'warn' ? 'warning' : 'danger');
-    const exitVal = ipMasked ? (c.exitIp ? (c.exitIp + (c.exitCountry ? ' · ' + c.exitCountry : '')) : 'masked · IP hidden') : ('exposed · real IP' + (c.exitIp ? ' ' + c.exitIp : ''));
-    const cards = [
-      ['Exit IP', exitVal, ipMasked ? 'ok' : 'bad'],
-      ['WebRTC', c.webrtcProtected ? 'no leak' : 'exposed', c.webrtcProtected ? 'ok' : 'bad'],
-      ['Fingerprint', c.fpCoherent ? ('coherent · ' + c.fpOs) : ('weak · ' + c.fpFaked + '/5'), c.fpCoherent ? 'ok' : 'warn']
+    // A real WebRTC leak (public IP != the proxy) means your real IP is discoverable even if HTTP is
+    // proxied -> still Exposed, score 0. IP-masking alone is no longer enough for "protected".
+    const webrtcLeak = !!c.webrtcRealLeak;
+    const exposed = !ipMasked || webrtcLeak;
+    // Exposed is gated on IP-masking, not the score: if the IP is masked you are NOT "Exposed", even
+    // lightly hardened (min "Partly protected"). If it isn't masked, always "Exposed".
+    // Step 5: verdict tier AND colour come from one score, so the ring never disagrees with the words.
+    // 7 Fully / 5-6 Well = green · 3-4 Partly / 1-2 Barely = amber · not masked or leaking = Exposed (red).
+    const verdict = exposed ? 'Exposed' : (c.score >= 7 ? 'Fully protected' : (c.score >= 5 ? 'Well protected' : (c.score >= 3 ? 'Partly protected' : 'Barely protected')));
+    const vVar = exposed ? 'danger' : (c.score >= 5 ? 'success' : 'warning');
+    const ringCls = exposed ? 'bad' : (c.score >= 5 ? '' : 'warn');
+    const proxyLine = ipMasked ? (c.proxyIp ? (c.proxyIp + (c.proxyCountry ? ' · ' + c.proxyCountry : '')) : 'connected · IP hidden') : 'direct — no proxy active';
+    const realLine = c.realIp ? (c.realIp + (c.realCountry ? ' · ' + c.realCountry : '')) : 'not captured — turn protection off once to record it';
+    // When exposed (real IP showing), a spoofed fingerprint/timezone is a MISMATCH, not protection —
+    // show those amber, and never claim "matched to proxy" when no proxy is actually masking.
+    const rows = [
+      ['WebRTC', c.webrtcRealLeak ? ('leaks ' + (c.webrtcLeakedIp || 'real IP')) : (c.webrtcTested ? 'no leak' : (c.webrtcProtected ? 'blocked — open a tab to test' : 'not blocked')), c.webrtcRealLeak ? 'bad' : (c.webrtcProtected ? (exposed ? 'warn' : 'ok') : 'warn')],
+      ['DNS', !ipMasked ? 'no proxy' : (c.dnsLeak ? 'SOCKS4 · may leak' : ((c.scheme ? c.scheme.toUpperCase() : 'proxy') + ' · proxy-side')), !ipMasked ? 'warn' : (c.dnsLeak ? 'bad' : 'ok')],
+      ['IPv6', c.ipv6Exposed ? 'real IPv6 leaks' : (exposed ? 'exposed' : 'no leak'), c.ipv6Exposed ? 'bad' : (exposed ? 'warn' : 'ok')],
+      ['Timezone', !c.tzMatched ? (exposed ? 'real — exposed' : 'real (≠ proxy)') : (c.tzCoherent ? ('matches ' + (c.exitCC || 'proxy')) : (c.tzMismatch ? ((c.tzCC || '?') + ' ≠ ' + (c.exitCC || 'proxy')) : 'spoofed')), exposed ? 'warn' : ((c.tzMatched && !c.tzMismatch) ? 'ok' : 'warn')],
+      ['Language', !c.langMatched ? (exposed ? 'real — exposed' : 'real (≠ proxy)') : (c.langCoherent ? ('matches ' + (c.exitCC || 'proxy')) : (c.langMismatch ? ((c.langCC || '?') + ' ≠ ' + (c.exitCC || 'proxy')) : 'spoofed')), exposed ? 'warn' : ((c.langMatched && !c.langMismatch) ? 'ok' : 'warn')],
+      ['Fingerprint', c.fpCoherent ? ('coherent · ' + c.fpOs) : (c.fpFaked ? ('partial · ' + c.fpFaked + '/5') : (exposed ? 'real — exposed' : 'real')), exposed ? 'warn' : (c.fpCoherent ? 'ok' : 'warn')]
     ];
-    let html = '<div class="dg-score"><div><div class="lbl">Protection</div><div class="dg-verdict" style="color:var(--' + sVar + ');">' + verdict + '</div></div><b style="color:var(--' + sVar + ');">' + c.score + '/7</b></div>';
-    html += cards.map(([name, val, cls]) => '<div class="dg-card"><span class="dg-dot ' + cls + '"></span><span class="dg-name">' + name + '</span><span class="dg-val ' + cls + '">' + diagEscape(val) + '</span></div>').join('');
+    let html = '<div class="dg2-head"><div class="dg2-ring ' + ringCls + '"><b style="color:var(--' + vVar + ');">' + c.score + '/7</b></div><div><div class="dg2-vd" style="color:var(--' + vVar + ');">' + verdict + '</div><div class="dg2-vsub">' + (!ipMasked ? 'your real IP is showing' : (webrtcLeak ? 'real IP leaking via WebRTC' : 'checks pass · ' + diagEscape(c.proxyCountry || 'proxy') + ' exit')) + '</div></div></div>';
+    html += '<div class="dg2-hero"><div class="dg2-hlbl">YOUR REAL IP &#8594; PROXY EXIT</div><div class="dg2-real">' + diagEscape(realLine) + '</div><div class="dg2-proxy" style="color:var(--' + (ipMasked ? 'success' : 'text') + ');">&#8594; ' + diagEscape(proxyLine) + '</div><div class="dg2-mask" style="color:var(--' + (exposed ? 'danger' : 'success') + ');">' + (!ipMasked ? 'real IP exposed ✗' : (webrtcLeak ? '⚠ real IP leaks via WebRTC' : 'real IP hidden — masked ✓')) + '</div></div>';
+    html += rows.map(function (r) { return '<div class="dg-card"><span class="dg-dot ' + r[2] + '"></span><span class="dg-name">' + r[0] + '</span><span class="dg-val ' + r[2] + '">' + diagEscape(r[1]) + '</span></div>'; }).join('');
     if (diagDetail && c.detail) {
-      html += '<div class="dg-detail">' + c.detail.map((d) => '<div class="dg-drow"><span class="dg-check ' + (d.ok ? 'ok' : 'bad') + '">' + (d.ok ? '✓' : '✗') + '</span><span style="flex:1;">' + diagEscape(d.label) + '</span>' + (d.extra ? '<span class="dg-xtra">extra</span>' : '') + '</div>').join('') + '</div>';
+      // When exposed, the per-vector checks below are still factually ✓ (the value IS spoofed) but they
+      // don't protect you — say so, so a wall of green ✓ never reads as "safe" next to 0/7 Exposed.
+      var exposedNote = exposed ? '<div class="dg-drow" style="color:var(--danger);font-size:11px;">Your real IP is exposed — the spoofing below can\'t protect you while your IP is showing.</div>' : '';
+      html += '<div class="dg-detail">' + exposedNote + c.detail.map(function (d) { return '<div class="dg-drow"><span class="dg-check ' + (d.ok ? 'ok' : 'bad') + '">' + (d.ok ? '✓' : '✗') + '</span><span style="flex:1;">' + diagEscape(d.label) + '</span>' + (d.extra ? '<span class="dg-xtra">extra</span>' : '') + '</div>'; }).join('') + '</div>';
     }
-    html += '<div class="dg-fresh">Checked ' + diagTimeAgo(c.ts) + ' · refreshes when you switch identity</div>';
+    html += '<div class="dg2-foot"><span class="dg-fresh" style="margin:0;">Checked ' + diagTimeAgo(c.ts) + ' · live proxy</span><a href="https://ipleak.net" target="_blank" rel="noopener nofollow">Full external test ›</a></div>';
     if (c.detail) html += '<div class="dg-toggle" data-diagtoggle="1">' + (diagDetail ? 'Hide details' : 'Show all ' + c.detail.length + ' checks ›') + '</div>';
     el.innerHTML = html;
   }
   function getDiagCache() { return new Promise((res) => chrome.storage.local.get(['diagCache'], (d) => res(d.diagCache || null))); }
+  function getRealIpBaseline() { return new Promise((res) => chrome.storage.local.get(['realIpBaseline'], (d) => res((d && d.realIpBaseline) || null))); }
   async function runDiagnostics(force) {
     const el = document.getElementById('diagResults');
     if (!el) return;
@@ -1689,6 +1755,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function deactivateProxy() {
+    chrome.storage.local.remove('diagCache'); // proxy state changed -> Diagnostics must re-measure, never show a stale "protected"
     chrome.runtime.sendMessage({ action: 'deactivateProxy' }, (response) => {
       if (chrome.runtime.lastError) {
         console.error('Error deactivating proxy:', chrome.runtime.lastError);

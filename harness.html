@@ -1,0 +1,55 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>ProxyBro popup harness</title>
+<script>
+// ---- Controllable mock state (set from preview_eval before driving) ----
+window.__mock = {
+  storage: {},
+  proxyConfig: { mode: 'direct' },        // or { mode:'fixed_servers', rules:{ singleProxy:{host,port,scheme} } }
+  webrtcPolicy: 'default',                 // or 'disable_non_proxied_udp'
+  exitIp: '', exitCountry: '', exitOk: true,
+  webrtcIps: [], activeTabUrl: 'https://example.com', noTab: false,   // WebRTC probe: candidate IPs + whether a page exists
+  sent: []                                 // captured chrome.runtime.sendMessage payloads
+};
+var M = window.__mock;
+var realFetch = window.fetch.bind(window);
+window.fetch = function (url, opts) {
+  var u = String(url);
+  if (u.indexOf('cdn-cgi/trace') > -1) return Promise.resolve({ ok: true, text: function () { return Promise.resolve(M.exitOk ? ('ip=' + M.exitIp + '\nloc=' + M.exitCountry + '\n') : ''); } });
+  if (u.indexOf('ipwho.is') > -1 || u.indexOf('ipify') > -1) return Promise.resolve({ ok: M.exitOk, json: function () { return Promise.resolve({ ip: M.exitIp, country: M.exitCountry, city: null }); } });
+  if (u.indexOf('generate_204') > -1) return Promise.resolve({ status: M.exitOk ? 204 : 0 });
+  return realFetch(url, opts); // popup.html, popup.js, /config, user-agents.json
+};
+var CB = function (cb, val) { if (typeof cb === 'function') cb(val); return Promise.resolve(val); };
+window.chrome = {
+  storage: { local: {
+    get: function (keys, cb) { var r = {}; var ks = Array.isArray(keys) ? keys : (typeof keys === 'string' ? [keys] : (keys ? Object.keys(keys) : Object.keys(M.storage))); ks.forEach(function (k) { if (k in M.storage) r[k] = M.storage[k]; }); return CB(cb, r); },
+    set: function (o, cb) { Object.assign(M.storage, o); return CB(cb); },
+    remove: function (keys, cb) { (Array.isArray(keys) ? keys : [keys]).forEach(function (k) { delete M.storage[k]; }); return CB(cb); }
+  } },
+  runtime: { getManifest: function () { return { version: '1.22.0' }; }, lastError: null, sendMessage: function (msg, cb) { M.sent.push(msg); return CB(cb, { success: true }); }, onMessage: { addListener: function () {} }, getURL: function (p) { return p; }, id: 'harness' },
+  tabs: { create: function () {}, query: function (q, cb) { return CB(cb, M.noTab ? [] : [{ id: 1, url: M.activeTabUrl }]); }, update: function () {}, sendMessage: function () {} },
+  proxy: { settings: { set: function (o, cb) { if (o && o.value) M.proxyConfig = o.value; return CB(cb); }, get: function (o, cb) { return CB(cb, { value: M.proxyConfig, levelOfControl: 'controlled_by_this_extension' }); }, clear: function () {} } },
+  privacy: { network: { webRTCIPHandlingPolicy: { set: function (o, cb) { if (o && o.value) M.webrtcPolicy = o.value; return CB(cb); }, get: function (o, cb) { return CB(cb, { value: M.webrtcPolicy, levelOfControl: 'controlled_by_this_extension' }); } } } },
+  alarms: { create: function () {}, onAlarm: { addListener: function () {} }, clear: function () {} },
+  webRequest: { onAuthRequired: { addListener: function () {}, removeListener: function () {} }, onBeforeRequest: { addListener: function () {} } },
+  declarativeNetRequest: { updateDynamicRules: function () {}, getDynamicRules: function (cb) { return CB(cb, []); } },
+  scripting: { executeScript: function () { return Promise.resolve([{ result: (M.webrtcIps || []) }]); } },
+  cookies: { getAll: function (o, cb) { return CB(cb, []); }, remove: function () {} },
+  browsingData: { remove: function () {} }, notifications: { create: function () {} },
+  action: { setBadgeText: function () {}, setIcon: function () {} }, webNavigation: { onCompleted: { addListener: function () {} } }
+};
+</script>
+</head><body>
+<script>
+(async function () {
+  var html = await (await realFetch('popup.html')).text();
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('style').forEach(function (s) { document.head.appendChild(s.cloneNode(true)); });
+  // body without the popup.js script tag (we load that ourselves so it runs)
+  doc.querySelectorAll('script').forEach(function (s) { s.remove(); });
+  document.body.innerHTML = doc.body.innerHTML;
+  var s = document.createElement('script'); s.src = 'popup.js';
+  s.onload = function () { try { document.dispatchEvent(new Event('DOMContentLoaded')); } catch (e) { window.__initError = String(e); } window.__ready = true; };
+  document.body.appendChild(s);
+})();
+</script>
+</body></html>
