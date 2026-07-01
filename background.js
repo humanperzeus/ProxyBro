@@ -539,6 +539,8 @@ function applySpoofingSettings() {
     console.error('Error setting Do Not Track:', e);
   }
 
+  // Reliable path: (re)register or unregister the document_start user script for FUTURE page loads.
+  updateSpoofUserScript(spoofingSettings);
   // Apply the page spoof in the MAIN world (so the page itself sees the overrides),
   // injected immediately on every main-frame navigation + the currently open tabs.
   try {
@@ -548,7 +550,7 @@ function applySpoofingSettings() {
       chrome.tabs.query({}, function (tabs) {
         for (let i = 0; i < tabs.length; i++) {
           const u = tabs[i].url || '';
-          if (u.startsWith('http://') || u.startsWith('https://')) injectSpoof(tabs[i].id);
+          if (u.startsWith('http://') || u.startsWith('https://')) injectSpoof(tabs[i].id, true);
         }
       });
     }
@@ -577,15 +579,84 @@ function isSpoofEnabled(s) {
   );
 }
 
+// Reliable fingerprint spoof: a document_start MAIN-world USER SCRIPT installs the overrides BEFORE any
+// page script runs -> no race, no intermittent real-fingerprint leak. Needs the "userScripts" permission
+// AND the user's "Allow user scripts" toggle; if chrome.userScripts is absent we fall back to executeScript.
+let spoofViaUserScripts = false;
+function buildSpoofCode(s) { return '(' + pageSpoof.toString() + ')(' + JSON.stringify(s) + ');'; }
+async function updateSpoofUserScript(s) {
+  if (typeof chrome === 'undefined' || !chrome.userScripts) { spoofViaUserScripts = false; return; }
+  try {
+    const on = isSpoofEnabled(s);
+    let existing = [];
+    try { existing = await chrome.userScripts.getScripts({ ids: ['pb-spoof'] }); } catch (e) {}
+    if (!on) {
+      if (existing && existing.length) { try { await chrome.userScripts.unregister({ ids: ['pb-spoof'] }); } catch (e) {} }
+      spoofViaUserScripts = false; return;
+    }
+    const script = { id: 'pb-spoof', matches: ['*://*/*'], allFrames: true, runAt: 'document_start', world: 'MAIN', js: [{ code: buildSpoofCode(s) }] };
+    if (existing && existing.length) await chrome.userScripts.update([script]);
+    else await chrome.userScripts.register([script]);
+    spoofViaUserScripts = true;
+    dlog('[ProxyBro] spoof registered as a document_start user script (reliable, no race)');
+  } catch (e) {
+    spoofViaUserScripts = false;
+    console.warn('[ProxyBro] userScripts unavailable — enable "Allow user scripts" for leak-proof spoofing: ' + (e && e.message));
+  }
+}
+
+// ---- Fail-closed protection (option A): proxy ON must imply reliable spoof is live ----
+// reliableSpoofLive() is true iff the "userScripts" permission AND the user's "Allow user
+// scripts" toggle are on — exactly when the persistent document_start spoof runs. If a
+// spoofing identity is active but that drops, we disconnect rather than let a page load on
+// the real fingerprint under the illusion of protection.
+function reliableSpoofLive() { return typeof chrome !== 'undefined' && !!chrome.userScripts; }
+let autoPaused = false;
+function notifyProtectionPaused() {
+  try {
+    chrome.notifications.create('pb-protection-paused', {
+      type: 'basic', iconUrl: chrome.runtime.getURL('icons/icon128.png'), priority: 2,
+      title: 'ProxyBro — protection paused',
+      message: '“Allow user scripts” was turned off, so you were disconnected to prevent a fingerprint leak. Re-enable it (chrome://extensions → ProxyBro → Details), then reactivate.'
+    });
+  } catch (e) {}
+}
+function autoPauseProtection() {
+  if (autoPaused) return; // don't repeat on every navigation
+  autoPaused = true;
+  try {
+    chrome.proxy.settings.set({ value: { mode: 'direct' }, scope: 'regular' }, () => {
+      activeProxy = null;
+      proxyState.connected = false;
+      setKillSwitchRule(false);
+      chrome.storage.local.remove('activeProxyData');
+      dlog('[ProxyBro] auto-paused: reliable spoof not live while a spoofing identity was active');
+      notifyProtectionPaused();
+    });
+  } catch (e) { console.warn('[ProxyBro] autoPause failed', e && e.message); }
+}
+// Backstop on every main-frame navigation: if a spoofing identity is active but the reliable
+// document_start spoof isn't live (toggle switched off mid-session), disconnect instead of leaking.
+function enforceProtection() {
+  if (!activeProxy) return;                      // no proxy engaged → nothing to leak
+  if (!isSpoofEnabled(spoofingSettings)) return; // identity doesn't spoof → nothing to enforce
+  if (reliableSpoofLive()) return;               // reliable document_start spoof is live → fine
+  autoPauseProtection();                         // spoof required + proxy on, but spoof not live → fail closed
+}
+
 function spoofNavListener(details) {
   if (details.frameId !== 0) return;
-  injectSpoof(details.tabId);
+  enforceProtection();
 }
 
 // Reads spoof settings straight from storage on every navigation, so it is immune to
 // the MV3 service-worker waking with un-hydrated in-memory state (the listener fires
 // before any async load completes).
-function injectSpoof(tabId) {
+function injectSpoof(tabId, force) {
+  // Fresh navigations are handled reliably by the document_start user script. We NEVER use the racy
+  // executeScript path as a fresh-load fallback (it can leak) — if reliable spoofing isn't live we
+  // fail closed elsewhere. This only updates ALREADY-OPEN tabs (force) once spoofing is confirmed live.
+  if (!force || !reliableSpoofLive()) return;
   chrome.storage.local.get(['spoofingSettings'], (d) => {
     const s = d.spoofingSettings || spoofingSettings;
     const on = isSpoofEnabled(s);
@@ -1168,6 +1239,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'activateProxy') {
+    // Fail closed (option A): never turn on the proxy for a spoofing identity unless the reliable
+    // document_start spoof can actually run. The popup sends updateSpoofingSettings first, so
+    // spoofingSettings already reflects this identity here.
+    if (isSpoofEnabled(spoofingSettings) && !reliableSpoofLive()) {
+      sendResponse({ success: false, needsUserScripts: true,
+        error: 'Enable “Allow user scripts” for ProxyBro to activate leak-proof protection: chrome://extensions → ProxyBro → Details → Allow user scripts.' });
+      return true;
+    }
     try {
       const config = {
         mode: 'fixed_servers',
@@ -1189,6 +1268,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
           activeProxy = message.proxy;
+          autoPaused = false; // fresh protected session — re-arm the auto-pause backstop
           proxyState.connected = true;
           proxyState.lastChecked = new Date();
           setKillSwitchRule(false); // clear any active kill-switch block

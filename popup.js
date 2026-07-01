@@ -1843,7 +1843,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       } else {
         const errorMsg = response ? response.error : 'Unknown error';
-        showNotification(`Activation failed: ${errorMsg}`, 'error');
+        if (response && response.needsUserScripts) {
+          statusMsg.textContent = 'Protection off — enable “Allow user scripts” to activate.';
+          showNotification(errorMsg, 'error');
+        } else {
+          showNotification(`Activation failed: ${errorMsg}`, 'error');
+        }
       }
     });
   }
