@@ -6,11 +6,11 @@
 
 A Chrome (MV3) proxy manager that pairs every proxy with a coherent, **country‑matched** privacy fingerprint — so each account looks like its own real device, not a row in your spreadsheet.
 
-[![version](https://img.shields.io/badge/version-1.19-blue.svg)](manifest.json)
+[![version](https://img.shields.io/github/manifest-json/v/humanperzeus/ProxyBro?label=version&color=blue)](manifest.json)
 [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-success.svg)](manifest.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE)
 
-[**proxybro.app**](https://proxybro.app) · Chrome Web Store *(coming soon)* · [Report an issue](../../issues)
+[**proxybro.app**](https://proxybro.app) · [Chrome Web Store](https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj) · [Report an issue](../../issues)
 
 <br>
 
@@ -56,13 +56,14 @@ ProxyBro turns a list of proxies into **identities**. Each identity is a saved p
 
 ## Install
 
-**Chrome Web Store** — *coming soon* (the easy way).
+**[Chrome Web Store](https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj)** — the easy way (auto‑updates).
 
-**Unpacked (developer):**
-1. Clone this repo
+**Unpacked (developer / any Chromium browser):**
+1. Download [`proxybro.zip`](../../releases/latest) (or clone this repo) and unzip
 2. Open `chrome://extensions` and enable **Developer mode**
-3. Click **Load unpacked** and select the project folder
-4. Pin the **ProxyBro** icon to your toolbar
+3. Click **Load unpacked** and select the folder
+4. Open ProxyBro's **Details** and turn on **“Allow user scripts”** — required so your fingerprint applies before any page script runs (leak‑proof). ProxyBro shows a one‑tap setup card for this.
+5. Pin the **ProxyBro** icon to your toolbar
 
 ## How it works
 
@@ -79,7 +80,8 @@ ProxyBro turns a list of proxies into **identities**. Each identity is a saved p
 | `storage` | save identities and settings on your device |
 | `webRequest`, `webRequestAuthProvider` | authenticate to proxies that need it |
 | `privacy` | apply the WebRTC leak‑protection policy |
-| `scripting`, `webNavigation` | apply the fingerprint on each page load |
+| `userScripts` | inject your fingerprint at **document_start**, before any page script — so the real one never leaks (uses the one‑time “Allow user scripts” toggle) |
+| `scripting`, `webNavigation` | update the fingerprint on already‑open tabs |
 | `declarativeNetRequest` | request blocking |
 | `tabs`, `cookies`, `notifications` | switch context, optional cookie clear, status |
 
