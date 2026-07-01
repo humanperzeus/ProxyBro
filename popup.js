@@ -308,7 +308,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // The status lives on the active identity card (re-find after the await — the list may have re-rendered).
-    const isProtected = !!activeProxy && exit.ok;
+    // Ground truth: read Chrome's LIVE proxy config, not the stored activeProxy flag (which can be
+    // stale-active after an update / SW restart / Pro->Free drop). "Protected" requires a proxy really
+    // carrying traffic, the exit responding, AND WebRTC not leaking the real IP.
+    const live = await getLiveProxyConfig();
+    const proxyOn = live.on;
+    const isProtected = proxyOn && exit.ok && !rtcLeak;
     const sEl = document.getElementById('activeStatus');
     const cEl = document.getElementById('activeCard');
     const dw = document.getElementById('goDirectWrap');
@@ -318,13 +323,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const country = (ap && ap.country) || (apx && apx.country) || exit.country || '';
       if (sEl) sEl.textContent = 'Protected · ' + (exit.ip ? ((country ? country + ' · ' : '') + exit.ip) : 'exit IP hidden');
       if (dw) dw.style.display = 'block';
-    } else if (activeProxy && !exit.ok) {
+    } else if (proxyOn && exit.ok && rtcLeak) {
+      if (cEl) cEl.classList.remove('protected');
+      if (sEl) sEl.textContent = '⚠ WebRTC leak — your real IP is exposed';
+      if (dw) dw.style.display = 'block';
+    } else if (proxyOn && !exit.ok) {
       if (cEl) cEl.classList.remove('protected');
       if (sEl) sEl.textContent = 'Proxy slow — tap to re-check';
       if (dw) dw.style.display = 'block';
     } else {
       if (cEl) cEl.classList.remove('protected');
-      if (sEl) sEl.textContent = 'Protection off · your real IP';
+      if (sEl) sEl.textContent = 'Protection off · tap your identity to reconnect';
       if (dw) dw.style.display = 'none';
     }
 
@@ -400,12 +409,22 @@ document.addEventListener('DOMContentLoaded', () => {
         '</div>';
     }).join('');
     list.querySelectorAll('.id-card').forEach((row) => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', async () => {
         if (row.dataset.locked) { gatedShowPaywall(); return; } // locked Pro identity → upgrade
         const p = profiles.find((x) => x.id === row.dataset.id);
         if (!p) return;
-        if (p.id === activeProfileId) updateHome(true); // re-check the active identity
-        else applyProfile(p);
+        if (p.id === activeProfileId) {
+          // Tapping the already-active identity: don't just re-check — make sure the proxy is REALLY
+          // applied. After an update / SW restart / Pro->Free drop the identity can show active while
+          // Chrome fell back to direct; the old re-check left it off with no way to reconnect by
+          // tapping (you had to Edit → Save & Activate). Re-apply if the live config isn't ours.
+          const px = p.proxy || (p.proxyFull ? proxies.find((x) => x.full === p.proxyFull) : null);
+          const live = await getLiveProxyConfig();
+          const reallyOn = !!(live.on && px && live.host === px.host && live.port === String(px.port));
+          if (reallyOn) updateHome(true); else applyProfile(p);
+        } else {
+          applyProfile(p);
+        }
       });
     });
     list.querySelectorAll('.idc-edit').forEach((el) => {
@@ -798,6 +817,24 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) { resolve(false); }
     });
   }
+  // Ground truth for "is a proxy really carrying our traffic": read Chrome's LIVE proxy config, not
+  // our stored activeProxy flag. That flag goes stale after an app update, a service-worker restart,
+  // or a Pro->Free drop (identity still shown active while Chrome quietly fell back to direct). Fails
+  // closed to { on:false } so we never over-claim protection.
+  function getLiveProxyConfig() {
+    return new Promise((resolve) => {
+      try {
+        chrome.proxy.settings.get({}, (s) => {
+          const v = s && s.value, sp = v && v.rules && v.rules.singleProxy;
+          if (v && v.mode === 'fixed_servers' && sp && sp.host) {
+            resolve({ on: true, host: sp.host, port: String(sp.port == null ? '' : sp.port) });
+          } else {
+            resolve({ on: false, host: '', port: '' });
+          }
+        });
+      } catch (e) { resolve({ on: false, host: '', port: '' }); }
+    });
+  }
   async function measureDiagnostics() {
     const exit = await probeExit();
     const webrtcProtected = await webrtcConfigStatus();
@@ -806,10 +843,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const vectors = [ua, canvas, webgl, tz, lang];
     const faked = vectors.filter(Boolean).length;
     const os = s.userAgent && /Windows/i.test(s.userAgent) ? 'Windows' : (s.userAgent && /Mac/i.test(s.userAgent) ? 'macOS' : (s.userAgent && /Linux|X11/i.test(s.userAgent) ? 'Linux' : 'Auto'));
-    const score = [!!exit.ok, webrtcProtected].concat(vectors).filter(Boolean).length;
+    // The IP is only "masked" when a proxy is REALLY carrying traffic. exit.ok alone is true even
+    // with the proxy OFF (the probe just returns the REAL IP), and our stored activeProxy flag can go
+    // stale after an update / SW restart / Pro->Free drop. Read Chrome's LIVE proxy config as the
+    // ground truth — this is the fix for "Fully protected 7/7 while the proxy is off".
+    const live = await getLiveProxyConfig();
+    const ipMasked = live.on && !!exit.ok;
+    const score = [ipMasked, webrtcProtected].concat(vectors).filter(Boolean).length;
     // The 7 that make the score, then 'extra' hardening shown only in the expert view.
     const detail = [
-      { label: 'Exit IP responds (proxy live)', ok: !!exit.ok },
+      { label: 'Exit IP masked by proxy', ok: ipMasked },
       { label: 'WebRTC leak blocked', ok: !!webrtcProtected },
       { label: 'User-Agent spoofed', ok: ua },
       { label: 'Canvas randomised', ok: canvas },
@@ -822,22 +865,28 @@ document.addEventListener('DOMContentLoaded', () => {
       { label: 'Device memory set', ok: s.memoryMode === 'manual', extra: true },
       { label: 'Do Not Track on', ok: !!s.doNotTrack, extra: true }
     ];
-    return { ts: Date.now(), exitOk: !!exit.ok, exitIp: exit.ip || '', exitCountry: exit.country || '', webrtcProtected: webrtcProtected, fpCoherent: faked >= 3, fpOs: os, fpFaked: faked, score: score, detail: detail };
+    return { ts: Date.now(), ipMasked: ipMasked, exitOk: !!exit.ok, exitIp: exit.ip || '', exitCountry: exit.country || '', webrtcProtected: webrtcProtected, fpCoherent: faked >= 3, fpOs: os, fpFaked: faked, score: score, detail: detail };
   }
   let diagDetail = false;
   function diagVerdict(score) {
     return score >= 7 ? 'Fully protected' : (score >= 5 ? 'Well protected' : (score >= 3 ? 'Partly protected' : 'Exposed'));
   }
   function renderDiagCards(el, c) {
-    const sCls = c.score >= 6 ? 'ok' : (c.score >= 4 ? 'warn' : 'bad');
+    // If the IP isn't masked (proxy off / dead), the real IP is exposed — that's the dominant fact, so
+    // the verdict is "Exposed" no matter how good the fingerprint is. Never claim "protected" while the
+    // real IP is showing. Backward-compatible: old caches without ipMasked fall back to exitOk.
+    const ipMasked = (c.ipMasked !== undefined) ? c.ipMasked : c.exitOk;
+    const exposed = !ipMasked;
+    const verdict = exposed ? 'Exposed' : diagVerdict(c.score);
+    const sCls = exposed ? 'bad' : (c.score >= 6 ? 'ok' : (c.score >= 4 ? 'warn' : 'bad'));
     const sVar = sCls === 'ok' ? 'success' : (sCls === 'warn' ? 'warning' : 'danger');
-    const exitVal = c.exitOk ? (c.exitIp ? (c.exitIp + (c.exitCountry ? ' · ' + c.exitCountry : '')) : 'connected · IP hidden') : 'no response';
+    const exitVal = ipMasked ? (c.exitIp ? (c.exitIp + (c.exitCountry ? ' · ' + c.exitCountry : '')) : 'masked · IP hidden') : ('exposed · real IP' + (c.exitIp ? ' ' + c.exitIp : ''));
     const cards = [
-      ['Exit IP', exitVal, c.exitOk ? 'ok' : 'bad'],
+      ['Exit IP', exitVal, ipMasked ? 'ok' : 'bad'],
       ['WebRTC', c.webrtcProtected ? 'no leak' : 'exposed', c.webrtcProtected ? 'ok' : 'bad'],
       ['Fingerprint', c.fpCoherent ? ('coherent · ' + c.fpOs) : ('weak · ' + c.fpFaked + '/5'), c.fpCoherent ? 'ok' : 'warn']
     ];
-    let html = '<div class="dg-score"><div><div class="lbl">Protection</div><div class="dg-verdict" style="color:var(--' + sVar + ');">' + diagVerdict(c.score) + '</div></div><b style="color:var(--' + sVar + ');">' + c.score + '/7</b></div>';
+    let html = '<div class="dg-score"><div><div class="lbl">Protection</div><div class="dg-verdict" style="color:var(--' + sVar + ');">' + verdict + '</div></div><b style="color:var(--' + sVar + ');">' + c.score + '/7</b></div>';
     html += cards.map(([name, val, cls]) => '<div class="dg-card"><span class="dg-dot ' + cls + '"></span><span class="dg-name">' + name + '</span><span class="dg-val ' + cls + '">' + diagEscape(val) + '</span></div>').join('');
     if (diagDetail && c.detail) {
       html += '<div class="dg-detail">' + c.detail.map((d) => '<div class="dg-drow"><span class="dg-check ' + (d.ok ? 'ok' : 'bad') + '">' + (d.ok ? '✓' : '✗') + '</span><span style="flex:1;">' + diagEscape(d.label) + '</span>' + (d.extra ? '<span class="dg-xtra">extra</span>' : '') + '</div>').join('') + '</div>';
