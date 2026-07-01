@@ -294,6 +294,17 @@
     .footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); text-align: center; font-size: 12px; color: var(--text-muted); }
     .footer a { color: var(--accent); text-decoration: none; }
     .footer a:hover { text-decoration: underline; }
+    /* One-time "Allow user scripts" setup card — shown until chrome.userScripts is available */
+    .us-onboard { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+    .uso-title { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--text); }
+    .uso-title .uso-spark { color: var(--success); font-size: 15px; }
+    .uso-sub { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; margin: 6px 0 11px; }
+    .uso-tog { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; }
+    .uso-tog-l { font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 7px; }
+    .uso-tog-l code { color: var(--text-muted); font-size: 12px; font-family: ui-monospace, monospace; }
+    .uso-sw { width: 34px; height: 19px; border-radius: 20px; background: var(--border-strong); position: relative; flex: none; }
+    .uso-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: #cfd3da; }
+    .uso-path { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -305,6 +316,16 @@
     <div class="screens" id="screens">
 
     <div class="tab-content active" id="home-tab">
+      <div id="usOnboard" class="us-onboard" style="display:none;">
+        <div class="uso-title"><span class="uso-spark">✦</span> Finish setup</div>
+        <div class="uso-sub">Flip this one switch on ProxyBro’s page to turn on leak-proof protection:</div>
+        <div class="uso-tog">
+          <span class="uso-tog-l"><code>&lt;/&gt;</code> Allow user scripts</span>
+          <span class="uso-sw"></span>
+        </div>
+        <div class="uso-path">chrome://extensions › ProxyBro › Details</div>
+        <button id="usoOpenBtn" class="btn-primary" style="width:100%; margin-top:11px;">Open settings →</button>
+      </div>
       <div class="id-head">YOUR IDENTITIES <span id="profileCount"></span></div>
       <div id="profilesList" class="id-cards"></div>
       <button id="newProfileBtn" class="btn-primary" style="width: 100%;">+ New identity</button>

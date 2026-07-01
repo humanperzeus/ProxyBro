@@ -194,8 +194,18 @@ document.addEventListener('DOMContentLoaded', () => {
     applyDarkMode();
     loadUserAgentTemplates();
     updateHome();
+    refreshUserScriptsOnboard();   // one-time "Allow user scripts" setup card when the toggle is off
     maybeShowRatingPrompt();   // v1.20: ask happy users to rate, route unhappy to private feedback
     loadReferrals();           // v1.21: data-driven referral cards (flag-gated, dismissible)
+  }
+
+  // Show the one-time "Allow user scripts" setup card until Chrome exposes chrome.userScripts
+  // (permission granted AND the per-extension toggle / Developer Mode on) — i.e. until the
+  // reliable document_start spoof can run. Mirrors background reliableSpoofLive().
+  function refreshUserScriptsOnboard() {
+    const card = document.getElementById('usOnboard');
+    if (!card) return;
+    card.style.display = (typeof chrome !== 'undefined' && chrome.userScripts) ? 'none' : 'block';
   }
 
   // Show the loaded build straight from the manifest so it can never drift.
@@ -1171,6 +1181,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function setupEventListeners() {
+    const usoBtn = document.getElementById('usoOpenBtn');
+    if (usoBtn) usoBtn.addEventListener('click', () => {
+      try { chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id }); } catch (e) {}
+    });
+    window.addEventListener('focus', refreshUserScriptsOnboard);   // drop the card if they enabled it and returned
     const _byId = (id) => document.getElementById(id);
     if (_byId('ratingLove')) _byId('ratingLove').addEventListener('click', openStoreReview);
     if (_byId('ratingMeh')) _byId('ratingMeh').addEventListener('click', () => showFeedbackForm('rating_prompt'));
