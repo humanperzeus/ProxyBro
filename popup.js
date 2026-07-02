@@ -144,6 +144,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const DEFAULT_SECURITY = JSON.parse(JSON.stringify(securitySettings));
   let profiles = [];
   let activeProfileId = null;
+  // Bumped on every activate/deactivate. An in-flight verify probe (updateHome) captures this at start
+  // and no-ops its cache/UI writes if it changed — so toggling off mid-check can never leave a stale
+  // "Protected" or poison the home cache. Keeps the toggle interruptible instead of locked.
+  let activationGen = 0;
   let editingProxyId = null;
   let proIsPaid = false;
   let feedbackSource = 'rating_prompt', feedbackCategory = '';
@@ -232,15 +236,25 @@ document.addEventListener('DOMContentLoaded', () => {
         .then((r) => { clearTimeout(t); resolve(r); })
         .catch(() => { clearTimeout(t); resolve(null); });
     });
-    // Cloudflare trace first — plaintext ip=/loc=, global, fast, rarely rate-limits.
-    let r = await fetchVia('https://www.cloudflare.com/cdn-cgi/trace', 8000);
-    if (r) { try { const t = await r.text(); const ipm = t.match(/(?:^|\n)ip=([^\n]+)/); const locm = t.match(/(?:^|\n)loc=([^\n]+)/); if (ipm) return { ok: true, ip: ipm[1].trim(), country: locm ? locm[1].trim() : null, city: null }; } catch (e) {} }
-    r = await fetchVia('https://ipwho.is/', 15000);
-    if (r) { try { const d = await r.json(); if (d && d.ip) return { ok: true, ip: d.ip, country: d.country_code || d.country, city: d.city }; } catch (e) {} }
-    // Smaller/faster endpoint — usually returns the IP even on slow proxies (no geo).
-    r = await fetchVia('https://api.ipify.org?format=json', 12000);
-    if (r) { try { const d = await r.json(); if (d && d.ip) return { ok: true, ip: d.ip, country: null, city: null }; } catch (e) {} }
-    const ping = await fetchVia('https://www.google.com/generate_204', 12000);
+    // Each probe returns a normalized {ok,ip,country,city} or null. Cloudflare + ipwho carry geo;
+    // ipify is an IP-only backup that often answers even when a slow proxy chokes the others.
+    const cloudflare = async () => { const r = await fetchVia('https://www.cloudflare.com/cdn-cgi/trace', 5000); if (!r) return null; try { const t = await r.text(); const ipm = t.match(/(?:^|\n)ip=([^\n]+)/); const locm = t.match(/(?:^|\n)loc=([^\n]+)/); if (ipm) return { ok: true, ip: ipm[1].trim(), country: locm ? locm[1].trim() : null, city: null }; } catch (e) {} return null; };
+    const ipwho = async () => { const r = await fetchVia('https://ipwho.is/', 5000); if (!r) return null; try { const d = await r.json(); if (d && d.ip) return { ok: true, ip: d.ip, country: d.country_code || d.country, city: d.city }; } catch (e) {} return null; };
+    const ipify = async () => { const r = await fetchVia('https://api.ipify.org?format=json', 5000); if (!r) return null; try { const d = await r.json(); if (d && d.ip) return { ok: true, ip: d.ip, country: null, city: null }; } catch (e) {} return null; };
+    // Race all three CONCURRENTLY; resolve the instant any yields an IP (usually Cloudflare, ~1s, with geo),
+    // else null once all settle. Hard-capped at the 5s fetch timeout — no more 8+15+12+12 sequential wait.
+    const firstOk = (fns) => new Promise((resolve) => {
+      let pending = fns.length, done = false;
+      fns.forEach((fn) => fn().then((v) => {
+        if (done) return;
+        if (v && v.ok) { done = true; resolve(v); }
+        else if (--pending === 0) resolve(null);
+      }, () => { if (!done && --pending === 0) resolve(null); }));
+    });
+    const hit = await firstOk([cloudflare, ipwho, ipify]);
+    if (hit) return hit;
+    // No endpoint returned an IP — last-ditch liveness check (proxy reachable at all?).
+    const ping = await fetchVia('https://www.google.com/generate_204', 4000);
     if (ping && ping.status === 204) return { ok: true, ip: null, country: null, city: null };
     return { ok: false };
   }
@@ -297,6 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function getHomeCache() { return new Promise((res) => { chrome.storage.local.get(['homeProbe'], (d) => res(d.homeProbe || null)); }); }
 
   async function updateHome(force) {
+    const gen = activationGen;            // if this changes mid-probe, a newer activate/off superseded us
     const ap = getActiveProfile();
     const dw0 = document.getElementById('goDirectWrap');
     if (!ap) { if (dw0) dw0.style.display = 'none'; return; }
@@ -310,10 +325,11 @@ document.addEventListener('DOMContentLoaded', () => {
       rtcLeak = cache.rtcLeak;
     } else {
       const sc = document.getElementById('activeStatus');
-      if (sc) sc.textContent = 'Checking…';
+      if (sc) sc.textContent = 'Verifying…';
       exit = await probeExit();
       const rtc = await webrtcProbe();
       rtcLeak = !!(rtc.ips && rtc.ips.some(function (ip) { return isPublicIp(ip) && ip !== exit.ip; }));
+      if (gen !== activationGen) return;   // toggled/switched during the probe — don't write a stale exit
       setHomeCache({ profileId: activeProfileId, exit: exit, rtcLeak: rtcLeak, ts: Date.now() });
     }
 
@@ -322,6 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // stale-active after an update / SW restart / Pro->Free drop). "Protected" requires a proxy really
     // carrying traffic, the exit responding, AND WebRTC not leaking the real IP.
     const live = await getLiveProxyConfig();
+    if (gen !== activationGen) return;    // superseded while reading the live config — let the newer run render
     const proxyOn = live.on;
     // Capture the real IP as a baseline whenever protection is genuinely OFF — Diagnostics uses it to
     // show "real X -> proxy Y". Only ever store a non-proxied probe (never the proxy's own IP).
@@ -1770,7 +1787,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function deactivateProxy() {
-    chrome.storage.local.remove('diagCache'); // proxy state changed -> Diagnostics must re-measure, never show a stale "protected"
+    activationGen++;                       // supersede the in-flight verify probe from the activation we're undoing
+    chrome.storage.local.remove(['diagCache', 'homeProbe']); // proxy state changed -> Diagnostics + Home must re-measure, never a stale "protected" exit
     chrome.runtime.sendMessage({ action: 'deactivateProxy' }, (response) => {
       if (chrome.runtime.lastError) {
         console.error('Error deactivating proxy:', chrome.runtime.lastError);
@@ -1825,6 +1843,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function activateProxy(proxy) {
+    activationGen++;                       // supersede any in-flight verify probe from a prior state
+    const _sc = document.getElementById('activeStatus');
+    if (_sc) _sc.textContent = 'Connecting…';   // instant feedback; proxy applies in <1s, verify follows
     // Clear cookies if enabled
     if (securitySettings.clearCookies) {
       chrome.cookies.getAll({}, (cookies) => {
