@@ -776,11 +776,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const toggle = document.getElementById('anonToggle');
       if (toggle) toggle.checked = true;
       renderProfilesList();
-      setTimeout(() => updateHome(true), 2500);
+      // renderProfilesList reset the card's status span — restore the live "Connecting…" ("Turn off" was
+      // already revealed by activateProxy and survives the re-render), then verify promptly. The concurrent
+      // probe waits up to 5s for the exit, so starting at 400ms (not 2500) is safe and feels instant.
+      const csc = document.getElementById('activeStatus'); if (csc) csc.textContent = 'Connecting…';
+      setTimeout(() => updateHome(true), 400);
     });
   }
 
   function goDirect() {
+    // Single-shot: hide the "Turn off" link on the first tap so a burst of rapid taps can't stack
+    // deactivate calls / notifications. If it's already hidden (off or mid-turn-off), ignore the tap.
+    const dw = document.getElementById('goDirectWrap');
+    if (dw) {
+      if (dw.style.display === 'none') return;
+      dw.style.display = 'none';
+    }
     deactivateProxy();
     // Going direct = back to your REAL identity: reset BOTH the fingerprint AND the security/WebRTC
     // settings, and PERSIST them (getSpoofingForDiag reads storage; the WebRTC check reads the live
@@ -1846,6 +1857,8 @@ document.addEventListener('DOMContentLoaded', () => {
     activationGen++;                       // supersede any in-flight verify probe from a prior state
     const _sc = document.getElementById('activeStatus');
     if (_sc) _sc.textContent = 'Connecting…';   // instant feedback; proxy applies in <1s, verify follows
+    const _dw = document.getElementById('goDirectWrap');
+    if (_dw) _dw.style.display = 'block';   // reveal "Turn off" immediately so you can bail during the verify
     // Clear cookies if enabled
     if (securitySettings.clearCookies) {
       chrome.cookies.getAll({}, (cookies) => {
