@@ -5,9 +5,10 @@ with a coherent, country-matched browser fingerprint + WebRTC-leak protection. F
 Pro ($5/mo · $30/yr) = unlimited identities + the advanced fingerprint editor. Privacy-first,
 sequential one-account-at-a-time (not a full anti-detect browser).
 
-**Chrome Web Store: v1.19.4 live** (v1.23.1 submitted — in review) · **Edge Add-ons: in review**.
-**`main`: v1.23.1** — leak-proof `document_start` fingerprint injection, fail-closed activation,
-advanced leak diagnostics, and a one-time "Allow user scripts" setup card. Uploaded to Chrome + Edge — awaiting approval.
+**Chrome Web Store: v1.19.4 live** · **Edge Add-ons: in review**.
+**`main`: v1.23.4** — leak-proof `document_start` fingerprint injection, fail-closed activation, advanced
+leak diagnostics, "Allow user scripts" setup card, plus instant activate/turn-off (no verify lag or toggle
+race) and a visible version pill. **GitHub release v1.23.4 is live**; Chrome/Edge upload of v1.23.4 is next.
 Site: https://proxybro.app · Releases: https://github.com/humanperzeus/ProxyBro/releases/latest
 
 ## Done (shipped / live)
@@ -20,7 +21,7 @@ Site: https://proxybro.app · Releases: https://github.com/humanperzeus/ProxyBro
 - Vectorized white-bg hi-res icon (16/32/48/128 + 512 + self-contained `icon.svg`)
 
 ## Next
-- [ ] Chrome + Edge approval of **v1.23.1** (both submitted, in review) → supersedes v1.19.4
+- [ ] Upload **v1.23.4** to Chrome + Edge (replaces the v1.23.1 that's in review) → supersedes v1.19.4
 - [ ] Edge Add-ons approval → wire the **Add to Edge** button
 
 ## Install
