@@ -785,6 +785,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function goDirect() {
+    // Single-shot: hide the "Turn off" link on the first tap so a burst of rapid taps can't stack
+    // deactivate calls / notifications. If it's already hidden (off or mid-turn-off), ignore the tap.
+    const dw = document.getElementById('goDirectWrap');
+    if (dw) {
+      if (dw.style.display === 'none') return;
+      dw.style.display = 'none';
+    }
     deactivateProxy();
     // Going direct = back to your REAL identity: reset BOTH the fingerprint AND the security/WebRTC
     // settings, and PERSIST them (getSpoofingForDiag reads storage; the WebRTC check reads the live
