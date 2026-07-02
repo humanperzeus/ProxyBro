@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ProxyBro — Proxy Manager & Switcher with Privacy Profiles",
-  "version": "1.23.2",
+  "version": "1.23.3",
   "description": "Proxy manager & switcher with country-matched privacy profiles — a coherent fingerprint + WebRTC-leak protection for every proxy",
   "author": "humanperzeus",
   "homepage_url": "https://humanperzeus.com/proxybro",
