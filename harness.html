@@ -25,7 +25,7 @@ window.chrome = {
     set: function (o, cb) { Object.assign(M.storage, o); return CB(cb); },
     remove: function (keys, cb) { (Array.isArray(keys) ? keys : [keys]).forEach(function (k) { delete M.storage[k]; }); return CB(cb); }
   } },
-  runtime: { getManifest: function () { return { version: '1.23.4' }; }, lastError: null, sendMessage: function (msg, cb) { M.sent.push(msg); return CB(cb, { success: true }); }, onMessage: { addListener: function () {} }, getURL: function (p) { return p; }, id: 'harness' },
+  runtime: { getManifest: function () { return { version: '1.23.5' }; }, lastError: null, sendMessage: function (msg, cb) { M.sent.push(msg); return CB(cb, { success: true }); }, onMessage: { addListener: function () {} }, getURL: function (p) { return p; }, id: 'harness' },
   tabs: { create: function () {}, query: function (q, cb) { return CB(cb, M.noTab ? [] : [{ id: 1, url: M.activeTabUrl }]); }, update: function () {}, sendMessage: function () {} },
   proxy: { settings: { set: function (o, cb) { if (o && o.value) M.proxyConfig = o.value; return CB(cb); }, get: function (o, cb) { return CB(cb, { value: M.proxyConfig, levelOfControl: 'controlled_by_this_extension' }); }, clear: function () {} } },
   privacy: { network: { webRTCIPHandlingPolicy: { set: function (o, cb) { if (o && o.value) M.webrtcPolicy = o.value; return CB(cb); }, get: function (o, cb) { return CB(cb, { value: M.webrtcPolicy, levelOfControl: 'controlled_by_this_extension' }); } } } },
