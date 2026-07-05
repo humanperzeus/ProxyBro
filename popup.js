@@ -367,11 +367,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dw) dw.style.display = 'none';
     }
 
-    // Backfill the active profile's country from the live exit (more accurate than the proxy host).
-    if (ap && exit.ok && exit.country && ap.country !== exit.country) {
-      ap.country = exit.country;
-      saveProfiles();
-      renderProfilesList();
+    // Backfill the active profile's country from the live exit (ground truth — routed THROUGH the proxy),
+    // and self-heal the fingerprint: an identity built before its proxy's country was known can have tz/lang
+    // pinned to your real locale (the proxy-test heal only runs while the popup stays open). The live exit is
+    // authoritative, so re-derive tz/lang to match it (US exit ⟹ US timezone), persist, and re-inject.
+    if (ap && exit.ok && exit.country) {
+      let changed = false;
+      if (ap.country !== exit.country) { ap.country = exit.country; changed = true; }
+      if (healSpoofCountry(ap, exit.country)) changed = true;
+      if (changed) { saveProfiles(); renderProfilesList(); }
     }
   }
 
@@ -545,6 +549,22 @@ document.addEventListener('DOMContentLoaded', () => {
       s.languageMode = 'manual'; s.language = m[1];
     }
     return s;
+  }
+
+  // Self-heal an identity's timezone/language to a country once its proxy's REAL country is known.
+  // A host:port proxy has no country when the identity is built, so tz/lang default to your real locale
+  // (incoherent: US exit + FR timezone). Re-derives them if they don't already match; when the profile is
+  // active, also updates + persists + re-injects the live spoof. Idempotent (no-ops once coherent).
+  function healSpoofCountry(profile, cc) {
+    if (!profile || !profile.spoof || !cc || !COUNTRY_TZ_LANG[cc]) return false;
+    if (tzCountry(profile.spoof.timezone) === cc) return false; // already matches this country — don't re-fire
+    applyCountryToSpoof(profile.spoof, cc);
+    if (profile.id === activeProfileId) {
+      applyCountryToSpoof(spoofingSettings, cc);
+      chrome.storage.local.set({ spoofingSettings: spoofingSettings });
+      chrome.runtime.sendMessage({ action: 'updateSpoofingSettings', settings: spoofingSettings });
+    }
+    return true;
   }
 
   // Coherent device templates — each is an internally-consistent real machine: the UA
@@ -2320,15 +2340,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (p.proxyFull === proxies[index].full) {
               if (p.country !== country) { p.country = country; changed = true; }
               if (p.proxy && p.proxy.country !== country) { p.proxy.country = country; changed = true; }
-              if (p.spoof && p.spoof.timezoneMode !== 'manual') { applyCountryToSpoof(p.spoof, country); changed = true; }
+              // Re-derive tz/lang whenever they don't match this country (not only when non-manual), and
+              // re-inject the live spoof if this profile is active — no heavy proxy re-activation needed.
+              if (healSpoofCountry(p, country)) changed = true;
             }
           });
-          if (changed) {
-            saveProfiles();
-            renderProfilesList();
-            const ap = getActiveProfile();
-            if (ap && ap.proxyFull === proxies[index].full) applyProfile(ap);
-          }
+          if (changed) { saveProfiles(); renderProfilesList(); }
         }
       }
     }
