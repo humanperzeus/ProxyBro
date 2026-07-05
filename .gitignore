@@ -18,6 +18,8 @@ Thumbs.db
 # Chrome extension specific (if you build it)
 *.crx
 *.pem
+# Store zip + GitHub release asset — rebuilt from source each release, distributed via GitHub Releases, never committed
+*.zip
 
 # Private files (if any)
 *.key
