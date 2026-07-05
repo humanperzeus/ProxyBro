@@ -6,11 +6,15 @@
 
 A Chrome (MV3) proxy manager that pairs every proxy with a coherent, **country‑matched** privacy fingerprint — so each account looks like its own real device, not a row in your spreadsheet.
 
-[![version](https://img.shields.io/github/manifest-json/v/humanperzeus/ProxyBro?label=version&color=blue)](manifest.json)
-[![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-success.svg)](manifest.json)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-live-1DB954?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj)
+[![Version](https://img.shields.io/github/manifest-json/v/humanperzeus/ProxyBro?label=version&style=for-the-badge&color=3B82F6)](manifest.json)
+[![Edge Add-ons](https://img.shields.io/badge/Edge_Add--ons-in_review-F59E0B?style=for-the-badge&logo=microsoftedge&logoColor=white)](#install)
 
-[**proxybro.app**](https://proxybro.app) · [Chrome Web Store](https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj) · [Report an issue](../../issues)
+[![Manifest V3](https://img.shields.io/badge/Chrome-MV3-success.svg)](manifest.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE)
+[![Pro](https://img.shields.io/badge/Pro-%245%2Fmo_·_%2430%2Fyr-8B5CF6.svg)](https://proxybro.app)
+
+[**→ Add to Chrome**](https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj) · [proxybro.app](https://proxybro.app) · [Report an issue](../../issues)
 
 <br>
 
