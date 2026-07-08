@@ -17,7 +17,6 @@ A Chrome (MV3) proxy manager that pairs every proxy with a coherent, **country�
 
 [**→ Add to Chrome**](https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj) · [proxybro.app](https://proxybro.app) · [Report an issue](../../issues)
 
-<!--ARCADE EMBED START--><div style="position: relative; padding-bottom: calc(56.25%); height: 0px; width: 100%;"><iframe src="https://demo.arcade.software/video/hpwKbCb8CUNRjGgoaN9p?embed&embed_mobile=tab&embed_desktop=inline&show_copy_link=true" title="ProxyBro Product Overview" frameborder="0" loading="lazy" webkitallowfullscreen mozallowfullscreen allowfullscreen allow="clipboard-write" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; color-scheme: light;" ></iframe></div><!--ARCADE EMBED END-->
 
 <br>
 
