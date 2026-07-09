@@ -839,7 +839,14 @@
       <div class="sheet-cap">NAME</div>
       <input type="text" id="edName" placeholder="e.g. Instagram-2" style="width:100%; padding:9px 11px; margin-bottom:12px;">
       <div class="sheet-cap">PROXY</div>
-      <input type="text" id="newProfileProxy" placeholder="host:port:user:pass — or blank to auto-pick" style="width:100%; padding:9px 11px; margin-bottom:8px;">
+      <input type="text" id="newProfileProxy" placeholder="host:port:user:pass — or blank to auto-pick" style="width:100%; padding:9px 11px; margin-bottom:6px;">
+      <div style="display:flex; gap:6px; margin-bottom:4px;" id="schemePills">
+        <div class="fpmode-pill on" data-scheme="http">HTTP</div>
+        <div class="fpmode-pill" data-scheme="https">HTTPS</div>
+        <div class="fpmode-pill" data-scheme="socks5">SOCKS5</div>
+        <div class="fpmode-pill" data-scheme="socks4">SOCKS4</div>
+      </div>
+      <div class="np-note" style="margin-bottom:8px;">Proxy type. Ask your provider. HTTP/SOCKS5 resolve DNS proxy-side (no leak); SOCKS4 leaks DNS. A <code>scheme://</code> you type overrides this.</div>
       <div class="np-note" id="editorFp">A matching fingerprint is generated from the proxy's country — that's it.</div>
       <div class="ed-toggle-row"><span>Block WebRTC leak</span><span class="sw on" id="edWebrtc"><i></i></span></div>
       <div class="ed-toggle-row"><span>Clear cookies on switch</span><span class="sw on" id="edCookies"><i></i></span></div>
