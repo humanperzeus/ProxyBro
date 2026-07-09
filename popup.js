@@ -155,6 +155,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // match); 'diverse' = also roll macOS/Linux per identity (more real-world spread, more
   // fields that must stay coherent). User-selectable in the Advanced sheet; persisted.
   let autoFpMode = 'windows';
+  let newProxyScheme = 'http'; // scheme pills in the identity editor (HTTP/HTTPS/SOCKS5/SOCKS4)
+  function withScheme(ln) { return (ln && !/^(https?|socks[45]):\/\//i.test(ln)) ? newProxyScheme + '://' + ln : ln; }
   let realPaid = false;   // true only when a Creem license has been validated
   // Creem checkout links + license-validation Worker. Point these at your Creem dashboard
   // product checkout URLs and your deployed Cloudflare Worker. NEVER put the Creem secret
@@ -627,7 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let best = null;
     const proxyEl = document.getElementById('newProfileProxy');
     if (proxyEl && proxyEl.value.trim()) {
-      const parsed = parseProxyLine(proxyEl.value.trim());
+      const parsed = parseProxyLine(withScheme(proxyEl.value.trim()));
       if (parsed) {
         if (!proxies.find((p) => p.full === parsed.full)) { proxies.push(parsed); saveProxies(); renderProxyList(); }
         best = proxies.find((p) => p.full === parsed.full);
@@ -744,7 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
       p.security = p.security || {};
       p.security.webrtcProtection = webrtc;
       p.security.clearCookies = cookies;
-      const newProxy = proxyEl ? proxyEl.value.trim() : '';
+      const newProxy = proxyEl ? withScheme(proxyEl.value.trim()) : '';
       const curProxy = (p.proxy && p.proxy.full) || p.proxyFull || '';
       saveProfiles();
       closeEditor();
@@ -1348,6 +1350,10 @@ document.addEventListener('DOMContentLoaded', () => {
       autoFpMode = p.dataset.fpmode;
       chrome.storage.local.set({ autoFpMode: autoFpMode });
       document.querySelectorAll('#advancedSheet [data-fpmode]').forEach((x) => x.classList.toggle('on', x.dataset.fpmode === autoFpMode));
+    }));
+    document.querySelectorAll('#schemePills [data-scheme]').forEach((p) => p.addEventListener('click', () => {
+      newProxyScheme = p.dataset.scheme;
+      document.querySelectorAll('#schemePills [data-scheme]').forEach((x) => x.classList.toggle('on', x.dataset.scheme === newProxyScheme));
     }));
     document.querySelectorAll('#advancedSheet [data-adv]').forEach((r) => r.addEventListener('click', () => { closeAdvanced(); closeEditor(); showScreen(r.dataset.adv, r.dataset.group); }));
     ['edWebrtc', 'edCookies'].forEach((id) => { const el = document.getElementById(id); if (el) el.addEventListener('click', () => el.classList.toggle('on')); });

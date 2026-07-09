@@ -436,11 +436,17 @@ function applyDnsHardening() {
     const net = chrome.privacy && chrome.privacy.network;
     if (isBrave || !net) return;
     const proxyOn = !!activeProxy;
+    const scheme = ((activeProxy && activeProxy.scheme) || '').toLowerCase();
+    // Prefetch/preconnect do LOCAL DNS -> always disable while proxied.
     if (net.networkPredictionEnabled && typeof net.networkPredictionEnabled.set === 'function') {
-      net.networkPredictionEnabled.set({ value: !proxyOn }); // off while proxied (kills prefetch DNS)
+      net.networkPredictionEnabled.set({ value: !proxyOn });
     }
+    // DoH ONLY for SOCKS4 (no remote DNS, so DoH beats a plaintext local-ISP leak). For HTTP/HTTPS/SOCKS5
+    // keep DoH OFF so Chrome hands DNS to the proxy = exit-country resolver (forcing DoH resolves real-side
+    // instead). Manual dnsRouting toggle still forces it on if the user wants.
+    const forceDoH = (proxyOn && scheme === 'socks4') || securitySettings.dnsRouting;
     if (net.dnsOverHttpsMode && typeof net.dnsOverHttpsMode.set === 'function') {
-      net.dnsOverHttpsMode.set({ value: (proxyOn || securitySettings.dnsRouting) ? 'on' : 'off' });
+      net.dnsOverHttpsMode.set({ value: forceDoH ? 'on' : 'off' });
     }
   } catch (e) { console.error('DNS hardening error:', e); }
 }
