@@ -55,10 +55,12 @@ ProxyBro turns a list of proxies into **identities**. Each identity is a saved p
 - One proxy + one coherent fingerprint per account — saved, one‑tap switchable
 - Auto‑generated **country‑matched** fingerprint: user‑agent, platform, Client Hints, WebGL, canvas, timezone and language all stay consistent with the exit IP
 - **Windows‑only** or **Diverse (Win / Mac / Linux)** mode — every identity gets a unique device profile and canvas seed, so two accounts never share a fingerprint
-- Bulk‑import a proxy list and turn the working ones straight into identities
+- **Any‑format bulk import** — paste `host:port`, `user:pass@host:port`, `type:ip:port:user:pass`, or comma/space/tab‑separated lists; ProxyBro auto‑detects the layout, no fixed order needed
+- **Proxy type picker** — HTTP / HTTPS / SOCKS5 / SOCKS4 per identity; turn the working proxies straight into identities
 
 **Protection**
 - WebRTC leak protection — stops your real IP leaking over WebRTC
+- **DNS‑leak hardening** — disables DNS prefetch while proxied and forces DoH for SOCKS4, so DNS stops leaking to your local ISP (HTTP/SOCKS5 resolve DNS through the proxy = exit‑country resolver)
 - Coherent spoofing that avoids the contradictions detection actually looks for
 - In‑app **Diagnostics**: exit IP, WebRTC, and fingerprint coherence — a plain‑language verdict plus an expandable expert breakdown
 
