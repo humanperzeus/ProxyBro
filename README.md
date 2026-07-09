@@ -22,6 +22,12 @@ A Chrome (MV3) proxy manager that pairs every proxy with a coherent, **country�
 
 <img src="docs/home.png" width="270" alt="ProxyBro — your identities">
 
+<br><br>
+
+**▶ Watch the demo**
+
+<a href="https://youtu.be/DqFqVGg_QWI"><img src="https://img.youtube.com/vi/DqFqVGg_QWI/hqdefault.jpg" width="480" alt="Watch the ProxyBro demo on YouTube"></a>
+
 </div>
 
 ---
