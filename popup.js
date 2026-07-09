@@ -2289,33 +2289,45 @@ document.addEventListener('DOMContentLoaded', () => {
   // Accepts: host:port · host:port:user:pass · user:pass@host:port ·
   // and any of those with a scheme prefix (http://, https://, socks4://, socks5://).
   function parseProxyLine(line) {
-    let scheme = 'http';
-    const schemeMatch = line.match(/^(https?|socks[45]):\/\//i);
-    if (schemeMatch) {
-      scheme = schemeMatch[1].toLowerCase();
-      line = line.slice(schemeMatch[0].length);
-    }
+    line = (line || '').trim();
+    if (!line) return null;
+    let scheme = '';
+    // Explicit scheme:// prefix wins.
+    const sm = line.match(/^(https?|socks[45]):\/\//i);
+    if (sm) { scheme = sm[1].toLowerCase(); line = line.slice(sm[0].length); }
 
-    let host, port, username = '', password = '';
+    const isPortNum = (t) => /^\d{1,5}$/.test(t) && +t >= 1 && +t <= 65535;
+    const isIp = (t) => /^\d{1,3}(\.\d{1,3}){3}$/.test(t);
+    const isHost = (t) => isIp(t) || /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/i.test(t);
 
+    let host = '', port = null, username = '', password = '';
+
+    // user:pass@host:port (creds before @, server after).
     if (line.includes('@')) {
-      const [creds, server] = line.split('@');
-      const credParts = creds.split(':');
-      const serverParts = server.split(':');
-      username = credParts[0] || '';
-      password = credParts[1] || '';
-      host = serverParts[0];
-      port = parseInt(serverParts[1]);
+      const at = line.split('@');
+      const creds = at.slice(0, -1).join('@').split(/[:,]/);
+      const server = (at[at.length - 1] || '').split(/[\s:,;|]+/).filter(Boolean);
+      username = creds[0] || ''; password = creds.slice(1).join(':') || '';
+      host = server[0] || ''; port = parseInt(server[1], 10);
     } else {
-      const parts = line.split(':');
-      host = parts[0];
-      port = parseInt(parts[1]);
-      if (parts.length >= 4) {
-        username = parts[2];
-        password = parts[3];
+      // Separator-agnostic: split on : , ; | tab or spaces, classify tokens by shape (order-agnostic).
+      const toks = line.split(/[\s:,;|]+/).filter(Boolean);
+      // Pull a scheme keyword token (type:ip:port:... lists).
+      for (let i = toks.length - 1; i >= 0; i--) {
+        if (/^(https?|socks[45])$/i.test(toks[i])) { if (!scheme) scheme = toks[i].toLowerCase(); toks.splice(i, 1); }
       }
+      let hi = toks.findIndex(isIp);
+      if (hi < 0) hi = toks.findIndex(isHost);
+      if (hi < 0) return null;
+      host = toks.splice(hi, 1)[0];
+      const pi = toks.findIndex(isPortNum);       // first port-like number after host
+      if (pi < 0) return null;
+      port = parseInt(toks.splice(pi, 1)[0], 10);
+      username = toks[0] || '';                    // remaining, in order: user then pass
+      password = toks[1] || '';
     }
 
+    scheme = scheme || 'http';
     if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
       return null;
     }
