@@ -1875,6 +1875,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function activateProxy(proxy) {
     activationGen++;                       // supersede any in-flight verify probe from a prior state
+    if (proxy && (proxy.scheme || '').toLowerCase() === 'socks4') {
+      showNotification('SOCKS4 has no remote DNS — DNS can leak. Use a SOCKS5 or HTTP proxy for proxy-side DNS.', 'error');
+    }
     const _sc = document.getElementById('activeStatus');
     if (_sc) _sc.textContent = 'Connecting…';   // instant feedback; proxy applies in <1s, verify follows
     const _dw = document.getElementById('goDirectWrap');
