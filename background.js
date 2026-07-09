@@ -426,36 +426,30 @@ function applyWebRTCPolicy() {
   } catch (e) { console.warn('[ProxyBro] WebRTC policy error:', e && e.message); }
 }
 
+// Harden DNS while a proxy is active: force DoH (so DNS stops hitting the local ISP resolver) and disable
+// network prediction (prefetch/preconnect do LOCAL DNS = a leak). Reverts when the proxy goes off.
+// NOTE: DoH is NOT proxy-tunneled — it hides DNS from the local network but still resolves from the real IP;
+// true exit-country DNS needs an HTTP/SOCKS5 proxy scheme. Best-effort, not a hard guarantee.
+function applyDnsHardening() {
+  try {
+    const isBrave = navigator.brave && navigator.brave.isBrave;
+    const net = chrome.privacy && chrome.privacy.network;
+    if (isBrave || !net) return;
+    const proxyOn = !!activeProxy;
+    if (net.networkPredictionEnabled && typeof net.networkPredictionEnabled.set === 'function') {
+      net.networkPredictionEnabled.set({ value: !proxyOn }); // off while proxied (kills prefetch DNS)
+    }
+    if (net.dnsOverHttpsMode && typeof net.dnsOverHttpsMode.set === 'function') {
+      net.dnsOverHttpsMode.set({ value: (proxyOn || securitySettings.dnsRouting) ? 'on' : 'off' });
+    }
+  } catch (e) { console.error('DNS hardening error:', e); }
+}
+
 function applySecuritySettings() {
   // WebRTC Leak Protection (unified — see applyWebRTCPolicy)
   applyWebRTCPolicy();
 
-  // DNS Routing - Check if the API is available and not in Brave Browser
-  try {
-    // Check if we're in Brave Browser
-    const isBrave = navigator.brave && navigator.brave.isBrave;
-
-    if (!isBrave && chrome.privacy && 
-        chrome.privacy.network && 
-        chrome.privacy.network.dnsOverHttpsMode && 
-        typeof chrome.privacy.network.dnsOverHttpsMode.set === 'function') {
-      if (securitySettings.dnsRouting) {
-        chrome.privacy.network.dnsOverHttpsMode.set({ value: 'on' });
-      } else {
-        chrome.privacy.network.dnsOverHttpsMode.set({ value: 'off' });
-      }
-    } else if (securitySettings.dnsRouting) {
-      // Show a notification that DNS routing is not supported
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon48.png',
-        title: 'DNS Routing Not Supported',
-        message: 'DNS routing is not supported in your browser.'
-      });
-    }
-  } catch (e) {
-    console.error('Error setting DNS mode:', e);
-  }
+  applyDnsHardening(); // DoH + prefetch control, driven by proxy-active OR the dnsRouting toggle
 
   // Block WebSockets (declarativeNetRequest)
   setWebSocketRule(securitySettings.blockWebSockets);
@@ -1273,6 +1267,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           proxyState.lastChecked = new Date();
           setKillSwitchRule(false); // clear any active kill-switch block
           chrome.storage.local.set({ activeProxyData: message.proxy }); // survive SW restart
+          applyDnsHardening(); // proxy on: force DoH + disable prefetch so DNS stops leaking to the local resolver
 
           // Verify it actually took effect and that WE (not another extension) control it.
           chrome.proxy.settings.get({}, (s) => {
@@ -1306,6 +1301,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         proxyState.lastChecked = new Date();
         setKillSwitchRule(false); // going direct intentionally — clear kill switch
         chrome.storage.local.remove('activeProxyData');
+        applyDnsHardening(); // proxy off: restore prefetch, DoH back to the user's dnsRouting toggle
         sendResponse({ success: true });
       }
     );
