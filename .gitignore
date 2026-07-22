@@ -35,3 +35,5 @@ redesign-mockup.html
 .wrangler/
 # Local AI session context (machine-specific paths; not for the public repo)
 CLAUDE.md
+# Living infra inventory (backend/deploy ops; not for the public repo)
+STACK.md

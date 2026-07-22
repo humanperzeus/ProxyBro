@@ -5,7 +5,7 @@ with a coherent, country-matched browser fingerprint + WebRTC-leak protection. F
 Pro ($5/mo · $30/yr) = unlimited identities + the advanced fingerprint editor. Privacy-first,
 sequential one-account-at-a-time (not a full anti-detect browser).
 
-**Chrome Web Store: v1.23.4 live** (v1.23.5–v1.23.8 built, upload pending) · **Edge Add-ons: in review**.
+**Chrome Web Store: v1.23.8 live** (verified 2026-07-22, store page + shields badge) · **Edge Add-ons: in review**.
 **`main`: v1.23.8** — leak-proof `document_start` fingerprint injection, fail-closed activation, instant
 activate/turn-off, **timezone/language self-heal** (always-coherent fingerprints), **DNS-leak hardening**
 (DoH + prefetch-off while proxied), **any-format proxy import**, and a proxy-type picker. GitHub release v1.23.8 latest.
@@ -25,8 +25,8 @@ Site: https://proxybro.app · Releases: https://github.com/humanperzeus/ProxyBro
 - Website trust: **open-source banner**, **vs-comparison** table, **About/maker**, **Product Hunt** badge, demo video
 
 ## Next
-- [x] Chrome Web Store: **v1.23.4 live** ✅
-- [ ] Upload **v1.23.8** to Chrome + Edge (supersedes 1.23.4; 1.23.5–1.23.8 built)
+- [x] Chrome Web Store: **v1.23.8 live** ✅ (verified 2026-07-22)
+- [ ] Edge: v1.23.8 upload/approval still pending (Partner Center)
 - [ ] Set YouTube promo-video URL in Chrome + Edge store listings
 - [ ] Edge Add-ons approval → wire the **Add to Edge** button
 - [ ] Grow users → real reviews / social proof (the one honest trust-signal gap left)
