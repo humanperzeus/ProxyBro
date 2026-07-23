@@ -34,12 +34,12 @@ h1 .slash{color:var(--accent)}
 @keyframes dash{to{stroke-dashoffset:-1000}}
 .edge.hl{stroke:var(--accent);stroke-width:2}
 .node{cursor:pointer}
-.node circle{stroke:rgba(0,0,0,.55);stroke-width:1.5;transition:opacity .15s}
+.node circle:not(.drillring){stroke:rgba(0,0,0,.55);stroke-width:1.5;transition:opacity .15s}
 .node text{fill:var(--fg);font-size:11px;paint-order:stroke;stroke:var(--bg);stroke-width:3px;pointer-events:none}
 .node .sub{fill:var(--dim);font-size:9px}
 .node.dim{opacity:.16}
 .edge.dim{opacity:.07}
-.node.sel circle{stroke:var(--fg);stroke-width:2.5}
+.node.sel circle:not(.drillring){stroke:var(--fg);stroke-width:2.5}
 #drill{position:fixed;inset:0;z-index:7;background:var(--bg);transform:translateY(101%);transition:transform .25s ease}
 #drill.open{transform:none}
 #drillhead{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;align-items:center;gap:.8rem;padding:.7rem 1.1rem;
@@ -81,7 +81,7 @@ footer{position:fixed;bottom:.8rem;left:50%;transform:translateX(-50%);z-index:4
 </header>
 <div id="legend"></div>
 <div class="stage" id="mainstage"></div>
-<div id="hint">hover: neighbors · click: details · double-click: drill into functions · drag: move</div>
+<div id="hint">hover: neighbors · click: details · double-click node with dashed ring: drill into functions · drag: move</div>
 
 <div id="drill">
   <div id="drillhead"><button class="backbtn" id="backbtn">← back to components</button><h2 id="drilltitle"></h2><span class="p" id="drillpath"></span></div>
@@ -139,17 +139,21 @@ function Graph(mount, spec){
     if(spec.directed)l.setAttribute("marker-end","url(#arw)");gE.appendChild(l);return l;});
   const nodeEls=nodes.map(n=>{const g=document.createElementNS(NS,"g");g.setAttribute("class","node");g.dataset.id=n.id;
     const c=document.createElementNS(NS,"circle");c.setAttribute("r",n.r);c.setAttribute("fill",n.color);
+    g.appendChild(c);
+    if(n.drill){const ring=document.createElementNS(NS,"circle");ring.setAttribute("r",n.r+4);
+      ring.setAttribute("fill","none");ring.setAttribute("stroke",n.color);ring.setAttribute("stroke-dasharray","3 3");
+      ring.setAttribute("class","drillring");ring.setAttribute("opacity",".7");g.appendChild(ring);}
     const t=document.createElementNS(NS,"text");t.setAttribute("text-anchor","middle");t.textContent=n.label;
     const s=document.createElementNS(NS,"text");s.setAttribute("text-anchor","middle");s.setAttribute("class","sub");s.textContent=n.sub||"";
-    g.append(c,t,s);gN.appendChild(g);return g;});
+    g.append(t,s);gN.appendChild(g);return g;});
   function place(){
     edges.forEach((e,i)=>{const s=byId[e.s],t=byId[e.t],l=edgeEls[i];
       // shorten directed edges so the arrow sits at the node rim
       let x1=s.x,y1=s.y,x2=t.x,y2=t.y;
       if(spec.directed){const dx=x2-x1,dy=y2-y1,d=Math.hypot(dx,dy)||1;x1+=dx/d*s.r;y1+=dy/d*s.r;x2-=dx/d*(t.r+7);y2-=dy/d*(t.r+7);}
       l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2);l.setAttribute("y2",y2);});
-    nodes.forEach((n,i)=>{const g=nodeEls[i];const[c]=g.getElementsByTagName("circle");
-      c.setAttribute("cx",n.x);c.setAttribute("cy",n.y);
+    nodes.forEach((n,i)=>{const g=nodeEls[i];
+      for(const c of g.getElementsByTagName("circle")){c.setAttribute("cx",n.x);c.setAttribute("cy",n.y);}
       const[t,s]=g.querySelectorAll("text");t.setAttribute("x",n.x);t.setAttribute("y",n.y+n.r+14);
       s.setAttribute("x",n.x);s.setAttribute("y",n.y+n.r+25);});
   }
@@ -168,13 +172,25 @@ function Graph(mount, spec){
   apply();
   svg.addEventListener("mouseover",ev=>{const g=ev.target.closest(".node");if(g)apply(g.dataset.id);});
   svg.addEventListener("mouseout",()=>apply());
-  let dragN=null;
-  svg.addEventListener("pointerdown",ev=>{const g=ev.target.closest(".node");if(!g)return;
-    dragN=byId[g.dataset.id];dragN.fixed=true;svg.classList.add("dragging");svg.setPointerCapture(ev.pointerId);});
-  svg.addEventListener("pointermove",ev=>{if(!dragN)return;const r=svg.getBoundingClientRect();
+  // Drag: capture the pointer only AFTER real movement (4px). Capturing on pointerdown retargets
+  // Chrome's click/dblclick onto the SVG (pointer capture), so node clicks/drills never fire —
+  // proven live 2026-07-23: real double-click dead while synthetic dispatch passed (false green).
+  let dragN=null,downPt=null,dragOff=[0,0],dragging=false;
+  const toView=(ev)=>{const r=svg.getBoundingClientRect();
     const sc=Math.min(r.width/W,r.height/H),ox=(r.width-W*sc)/2,oy=(r.height-H*sc)/2;
-    dragN.x=(ev.clientX-r.left-ox)/sc;dragN.y=(ev.clientY-r.top-oy)/sc;place();});
-  svg.addEventListener("pointerup",()=>{if(dragN){dragN.fixed=false;dragN=null;svg.classList.remove("dragging");}});
+    return [(ev.clientX-r.left-ox)/sc,(ev.clientY-r.top-oy)/sc];};
+  svg.addEventListener("pointerdown",ev=>{const g=ev.target.closest(".node");if(!g)return;
+    dragN=byId[g.dataset.id];downPt=[ev.clientX,ev.clientY];dragging=false;});
+  svg.addEventListener("pointermove",ev=>{if(!dragN||!downPt)return;
+    if(!dragging){
+      if(Math.hypot(ev.clientX-downPt[0],ev.clientY-downPt[1])<4)return;
+      dragging=true;dragN.fixed=true;svg.classList.add("dragging");svg.setPointerCapture(ev.pointerId);
+      const[vx,vy]=toView(ev);dragOff=[vx-dragN.x,vy-dragN.y]; // grab offset — no teleport to cursor
+    }
+    const[vx,vy]=toView(ev);dragN.x=vx-dragOff[0];dragN.y=vy-dragOff[1];place();});
+  svg.addEventListener("pointerup",ev=>{
+    if(dragging){dragN.fixed=false;svg.classList.remove("dragging");try{svg.releasePointerCapture(ev.pointerId);}catch{}}
+    dragN=null;downPt=null;dragging=false;});
   svg.addEventListener("click",ev=>{const g=ev.target.closest(".node");
     if(g){sel=g.dataset.id;apply();spec.onClick&&spec.onClick(g.dataset.id);}
     else{sel=null;apply();spec.onEmpty&&spec.onEmpty();}});
@@ -199,7 +215,8 @@ if(!comps.length){const d=document.createElement("div");
 
 const mainG=Graph(document.getElementById("mainstage"),{
   nodes:comps.map(c=>({id:c.id,label:c.name,sub:c.layer,color:COLORS[c.layer]||"#888",
-    r:9+Math.min(13,(cdeg[c.id]||0)*1.7),cluster:CENTERS[c.layer]||[.5,.5],hideKey:c.layer})),
+    r:9+Math.min(13,(cdeg[c.id]||0)*1.7),cluster:CENTERS[c.layer]||[.5,.5],hideKey:c.layer,
+    drill:(SYM[c.id]||[]).length>0})),
   edges:cedges,
   onClick:openComp, onEmpty:()=>{sel=null;panel.classList.remove("open");},
   onDbl:id=>{ if((SYM[id]||[]).length) openDrill(id); },
