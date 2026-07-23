@@ -40,6 +40,8 @@ h1 .slash{color:var(--accent)}
 .node.dim{opacity:.16}
 .edge.dim{opacity:.07}
 .node.sel circle:not(.drillring){stroke:var(--fg);stroke-width:2.5}
+.node.imp circle:not(.drillring){stroke:#fb7185;stroke-width:3}
+.edge.imp{stroke:#fb7185;stroke-width:1.8;opacity:.85}
 #drill{position:fixed;inset:0;z-index:7;background:var(--bg);transform:translateY(101%);transition:transform .25s ease}
 #drill.open{transform:none}
 #drillhead{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;align-items:center;gap:.8rem;padding:.7rem 1.1rem;
@@ -81,7 +83,7 @@ footer{position:fixed;bottom:.8rem;left:50%;transform:translateX(-50%);z-index:4
 </header>
 <div id="legend"></div>
 <div class="stage" id="mainstage"></div>
-<div id="hint">hover: neighbors · click: details · double-click node with dashed ring: drill into functions · drag: move</div>
+<div id="hint">hover · click: details · dblclick ⌖-ring: functions · drag</div>
 
 <div id="drill">
   <div id="drillhead"><button class="backbtn" id="backbtn">← back to components</button><h2 id="drilltitle"></h2><span class="p" id="drillpath"></span></div>
@@ -158,16 +160,19 @@ function Graph(mount, spec){
       s.setAttribute("x",n.x);s.setAttribute("y",n.y+n.r+25);});
   }
   place();
-  let sel=null,hidden=spec.hidden||new Set();
+  let sel=null,hidden=spec.hidden||new Set(),imp=null;
   function apply(focus){
     const f=focus||sel;
     nodes.forEach((n,i)=>{const vis=!hidden.has(n.hideKey);nodeEls[i].style.display=vis?"":"none";
       const on=!f||f===n.id||(neigh[f]&&neigh[f].has(n.id));
-      nodeEls[i].classList.toggle("dim",!!f&&!on);nodeEls[i].classList.toggle("sel",sel===n.id);});
+      nodeEls[i].classList.toggle("dim",imp?(!imp.has(n.id)&&sel!==n.id):(!!f&&!on));
+      nodeEls[i].classList.toggle("sel",sel===n.id);
+      nodeEls[i].classList.toggle("imp",!!imp&&imp.has(n.id)&&n.id!==sel);});
     edges.forEach((e,i)=>{const vis=!hidden.has(byId[e.s].hideKey)&&!hidden.has(byId[e.t].hideKey);
       edgeEls[i].style.display=vis?"":"none";
-      edgeEls[i].classList.toggle("hl",!!f&&(e.s===f||e.t===f));
-      edgeEls[i].classList.toggle("dim",!!f&&e.s!==f&&e.t!==f);});
+      edgeEls[i].classList.toggle("hl",!imp&&!!f&&(e.s===f||e.t===f));
+      edgeEls[i].classList.toggle("imp",!!imp&&(imp.has(e.s)||e.s===sel)&&(imp.has(e.t)||e.t===sel));
+      edgeEls[i].classList.toggle("dim",imp?!(imp.has(e.s)||e.s===sel)||!(imp.has(e.t)||e.t===sel):(!!f&&e.s!==f&&e.t!==f));});
   }
   apply();
   svg.addEventListener("mouseover",ev=>{const g=ev.target.closest(".node");if(g)apply(g.dataset.id);});
@@ -193,9 +198,10 @@ function Graph(mount, spec){
     dragN=null;downPt=null;dragging=false;});
   svg.addEventListener("click",ev=>{const g=ev.target.closest(".node");
     if(g){sel=g.dataset.id;apply();spec.onClick&&spec.onClick(g.dataset.id);}
-    else{sel=null;apply();spec.onEmpty&&spec.onEmpty();}});
+    else{sel=null;imp=null;apply();spec.onEmpty&&spec.onEmpty();}});
   svg.addEventListener("dblclick",ev=>{const g=ev.target.closest(".node");if(g&&spec.onDbl)spec.onDbl(g.dataset.id);});
-  return {select(id){sel=id;apply();},reset(){sel=null;apply();},setHidden(h){hidden=h;apply();}};
+  return {select(id){sel=id;apply();},reset(){sel=null;imp=null;apply();},setHidden(h){hidden=h;apply();},
+    setImpact(s){imp=s;apply();}};
 }
 
 // =================== main graph: components ===================
@@ -235,6 +241,7 @@ function openComp(id){
     +'<span class="path">'+esc(n.path)+'</span>'
     +'<p>'+esc(n.does)+'</p>'
     +(nsym?'<button class="drillbtn" data-drill="'+esc(id)+'">⌖ drill into '+nsym+' functions →</button>':'')
+    +'<button class="drillbtn" data-impact="'+esc(id)+'" style="border-color:#fb7185;color:#fb7185">☢ blast radius — what can break</button>'
     +(n.tech?'<h3>tech</h3><p>'+esc(n.tech)+'</p>':'')
     +((n.depends_on||[]).length?'<h3>depends on</h3>'+n.depends_on.map(d=>'<button class="chip" data-go="'+esc(d)+'">'+esc((cById[d]||{}).name||d)+'</button>').join(''):'')
     +(rdeps.length?'<h3>used by</h3>'+rdeps.map(d=>'<button class="chip" data-go="'+esc(d)+'">'+esc(cById[d].name)+'</button>').join(''):'')
@@ -243,10 +250,28 @@ function openComp(id){
     +(n.layer==="api"&&(A.apis||[]).length?'<h3>routes</h3><table>'+routeRows()+'</table>':'');
   panel.classList.add("open");mainG.select(id);
 }
+// blast radius = transitive dependents (reverse depends_on) — pure traversal, no server, no LLM
+const rdep={};for(const c of comps)for(const d of (c.depends_on||[]))(rdep[d]??=[]).push(c.id);
+function blast(id){const out=new Set(),q=[...(rdep[id]||[])];
+  while(q.length){const c=q.shift();if(out.has(c))continue;out.add(c);for(const n of rdep[c]||[])if(!out.has(n))q.push(n);}
+  out.delete(id);return out;}
+function showImpact(id){
+  const set=blast(id);mainG.select(id);mainG.setImpact(set);
+  const n=cById[id];
+  panel.innerHTML='<button class="close">✕</button>'
+    +'<h2>☢ '+esc(n.name)+'</h2>'
+    +'<span class="layerbadge" style="background:#fb7185">blast radius</span>'
+    +'<p>'+(set.size?'Ändere ich <b>'+esc(n.name)+'</b>, kann brechen:':'Nichts hängt von <b>'+esc(n.name)+'</b> ab — lokaler Umbau.')+'</p>'
+    +[...set].map(d=>'<button class="chip" data-impact="'+esc(d)+'">'+esc((cById[d]||{}).name||d)+'</button>').join('')
+    +(set.size?'<h3>nach der Änderung neu beweisen</h3>'+[id,...set].map(d=>cById[d]).filter(c=>c&&c.verify).map(c=>'<code>'+esc(c.verify)+'</code>').join(''):'')
+    +'<h3>agents</h3><code>node ~/Dev/Apps/AIMIND/tools/arch-impact.mjs . '+esc(id)+'</code>';
+  panel.classList.add("open");
+}
 panel.addEventListener("click",ev=>{
   if(ev.target.classList.contains("close")){panel.classList.remove("open");sel=null;mainG.reset();}
   const go=ev.target.dataset.go;if(go){ if(drillOpen) return; openComp(go);}
   const dr=ev.target.dataset.drill;if(dr)openDrill(dr);
+  const im=ev.target.dataset.impact;if(im&&!drillOpen)showImpact(im);
 });
 
 // =================== drilldown: functions of one component ===================
