@@ -1,0 +1,166 @@
+{
+  "schema": "arch/v1",
+  "project": "ProxyBro",
+  "updated": "2026-07-23",
+  "purpose": "Chrome (MV3) proxy manager: pairs every proxy with a coherent, country-matched privacy fingerprint (identity) + WebRTC/DNS leak protection, so each account looks like its own real device.",
+  "type": "browser-extension",
+  "deployment": { "mode": "prod", "note": "Chrome Web Store live (v1.23.8, id ceobadpmhnfmlndkcmobhejkmbjimmcj); Edge Add-ons in review; GitHub Releases zip for unpacked/developer installs. No server in THIS repo — payments/landing run in the separate private proxybro-worker repo." },
+  "stack": ["Chrome MV3 (service worker, no build step)", "vanilla JS (no framework, no bundler)", "chrome.userScripts (MAIN world, document_start)", "chrome.declarativeNetRequest", "chrome.privacy.network (WebRTC policy)", "chrome.proxy", "Creem (license/payments, external)", "Cloudflare Workers (license validation + landing, external, private repo)"],
+  "entrypoints": [
+    { "name": "Chrome Web Store (live)", "how": "https://chromewebstore.google.com/detail/ceobadpmhnfmlndkcmobhejkmbjimmcj", "verify": "curl -s 'https://img.shields.io/chrome-web-store/v/ceobadpmhnfmlndkcmobhejkmbjimmcj.json'" },
+    { "name": "Load unpacked (dev)", "how": "chrome://extensions -> Developer mode -> Load unpacked -> this folder -> enable 'Allow user scripts' in the extension's Details", "verify": "grep '\"version\"' manifest.json" },
+    { "name": "Popup UI harness (no install needed)", "how": "open harness.html directly in a normal browser tab — it mocks chrome.* and loads popup.html+popup.js so popup logic runs outside the extension context", "verify": "node --check popup.js" },
+    { "name": "Landing / buy (external, private repo)", "how": "https://proxybro.app", "verify": "curl -sI https://proxybro.app | head -1" }
+  ],
+  "components": [
+    {
+      "id": "popup-ui",
+      "name": "Popup UI",
+      "layer": "ui",
+      "path": "{popup.html,popup.js}",
+      "tech": "vanilla JS, 2373 lines, no framework",
+      "does": "Identity (profile) list + editor, bulk proxy import (any-format auto-detect), advanced per-field fingerprint editor, Diagnostics tab (exit IP/WebRTC/coherence probes against cloudflare-trace/ipwho.is/ipify), Free/Pro paywall + Creem license-key activation UI. Free = 1 identity (profiles.length gate), extras locked not deleted.",
+      "depends_on": ["background-worker", "user-agents-data", "proxybro-worker", "ip-geo-services", "manifest"],
+      "verify": "node --check popup.js"
+    },
+    {
+      "id": "background-worker",
+      "name": "Background Service Worker",
+      "layer": "core",
+      "path": "background.js",
+      "tech": "MV3 service worker, 1596 lines",
+      "does": "Owns all privacy mechanics: proxy activation (chrome.proxy.settings), WebRTC leak policy (chrome.privacy.network.webRTCIPHandlingPolicy), DNS hardening (DoH + prefetch-off while proxied), fail-closed fingerprint activation (won't turn on a spoofing identity unless the document_start user-script path is confirmed live), declarativeNetRequest rules (MV3 replacement for blocking webRequest), and registers the MAIN-world document_start user script that installs the fingerprint overrides before any page script runs.",
+      "depends_on": ["manifest", "ip-geo-services"],
+      "verify": "node --check background.js"
+    },
+    {
+      "id": "manifest",
+      "name": "Extension Manifest",
+      "layer": "data",
+      "path": "manifest.json",
+      "tech": "MV3 manifest",
+      "does": "Declares permissions (proxy, storage, webRequest(AuthProvider), privacy, userScripts, scripting, declarativeNetRequest, tabs, cookies, notifications, alarms, browsingData), host_permissions (<all_urls> + https://ipwho.is/*), service_worker entry (background.js), popup entry (popup.html), icon set, current version (source of truth for the version badge in README).",
+      "depends_on": [],
+      "verify": "grep '\"version\"' manifest.json"
+    },
+    {
+      "id": "user-agents-data",
+      "name": "user-agents.json",
+      "layer": "data",
+      "path": "user-agents.json",
+      "tech": "static JSON, 11 lines",
+      "does": "OS/browser-keyed user-agent strings (chrome_windows/mac/linux, firefox_*, safari_mac, edge_windows, mobile_safari) fetched by popup-ui at runtime via chrome.runtime.getURL to build the country-matched fingerprint options. Part of the Store zip (shipped).",
+      "depends_on": [],
+      "verify": "wc -l user-agents.json"
+    },
+    {
+      "id": "harness",
+      "name": "Popup Test Harness",
+      "layer": "automation",
+      "path": "harness.html",
+      "tech": "hand-rolled chrome.* mock, no test framework",
+      "does": "Mocks chrome.storage/runtime/proxy/privacy/tabs/scripting/declarativeNetRequest/cookies/browsingData/notifications/action/webNavigation with a controllable window.__mock state, then loads popup.html+popup.js so real popup logic runs against the mock. Driven from outside via preview_eval to assert STATE TRANSITIONS, not just syntax — this is the pre-push gate together with `node --check`.",
+      "depends_on": ["popup-ui"],
+      "verify": "open harness.html in a plain tab, drive via console, check window.__ready === true"
+    },
+    {
+      "id": "leak-test-page",
+      "name": "Leak & Fingerprint Test Suite",
+      "layer": "automation",
+      "path": "test/leak-test.html",
+      "tech": "standalone HTML/JS, no chrome.runtime calls",
+      "does": "Dev-only QA page (excluded from the Store zip): probes WebRTC candidate IPs, canvas/WebGL fingerprint, timezone/language the same way an external tracker would, so a developer can manually confirm ProxyBro's protections hold while it's active.",
+      "depends_on": [],
+      "verify": "open test/leak-test.html with ProxyBro active, compare readouts to Diagnostics tab"
+    },
+    {
+      "id": "license-worker-reference",
+      "name": "creem-worker.js (reference copy)",
+      "layer": "api",
+      "path": "creem-worker.js",
+      "tech": "Cloudflare Worker source, fetch handler",
+      "does": "A minimal REFERENCE implementation of the Creem license-activation endpoint (POST /validate -> Creem /v1/licenses/activate, holds CREEM_API_KEY server-side so the extension never ships it). Committed since v1.19.0, unmodified since — kept as documentation of the mechanism. NOT the deployed worker: the real, richer one (referral, feedback D1, rate-limit bindings) lives in the separate PRIVATE proxybro-worker repo and is what popup-ui actually calls.",
+      "depends_on": ["creem"],
+      "verify": "node --check creem-worker.js"
+    },
+    {
+      "id": "proxybro-worker",
+      "name": "proxybro-worker (external, private repo)",
+      "layer": "external",
+      "path": "",
+      "tech": "Cloudflare Workers + D1, separate PRIVATE repo humanperzeus/proxybro-worker",
+      "does": "Serves proxybro.app (landing, /buy, /check leak-test, /config) and the real /validate + /deactivate license endpoints popup-ui calls. Holds the Creem API keys server-side. Payment mode-flip, admin paths and secret names are documented in THAT repo's own docs/architecture.json, never here (public repo).",
+      "depends_on": ["creem"],
+      "verify": "curl -sI https://proxybro.app | head -1"
+    },
+    {
+      "id": "creem",
+      "name": "Creem",
+      "layer": "external",
+      "path": "",
+      "tech": "third-party SaaS, license-key billing",
+      "does": "Payment + license-key provider. $5/mo or $30/yr Pro plan. Extension never talks to Creem directly — only proxybro-worker holds the API key and activates/validates keys server-side.",
+      "depends_on": [],
+      "verify": "n/a — third-party SaaS status page only"
+    },
+    {
+      "id": "ip-geo-services",
+      "name": "IP/Geo probe services",
+      "layer": "external",
+      "path": "",
+      "tech": "cdn-cgi/trace (Cloudflare), ipwho.is, api.ipify.org",
+      "does": "Three independent exit-IP/country probes (first-ok wins) used both for Diagnostics (popup-ui) and for auto-generating a country-matched fingerprint + timezone/language self-heal (background-worker). ipwho.is is the one declared in host_permissions; the others ride on <all_urls>.",
+      "depends_on": [],
+      "verify": "curl -s https://ipwho.is | head -c 80"
+    },
+    {
+      "id": "chrome-web-store",
+      "name": "Chrome Web Store",
+      "layer": "external",
+      "path": "",
+      "tech": "distribution channel",
+      "does": "Auto-updating distribution channel for end users (id ceobadpmhnfmlndkcmobhejkmbjimmcj). GitHub Releases zip is the manual/unpacked alternative; Latest-only policy (older release assets deleted on each new tag).",
+      "depends_on": [],
+      "verify": "curl -s 'https://img.shields.io/chrome-web-store/v/ceobadpmhnfmlndkcmobhejkmbjimmcj.json'"
+    },
+    {
+      "id": "proxybro-marketing",
+      "name": "ProxyBro-marketing (external, no git)",
+      "layer": "external",
+      "path": "",
+      "tech": "asset folder, not version-controlled",
+      "does": "Marketing assets (demo video 'proxybro advertise.mp4') referenced from the README/landing; lives in a sibling folder with no git repo of its own.",
+      "depends_on": [],
+      "verify": "n/a — no repo, asset-only"
+    }
+  ],
+  "dataflows": [
+    { "from": "popup-ui", "to": "background-worker", "what": "chrome.runtime.sendMessage action payloads: updateSpoofingSettings, updateSecuritySettings, setCustomUserAgent, testProxies/testSingleProxy, deactivateProxy", "when": "every identity switch, settings change, or proxy test from the popup" },
+    { "from": "background-worker", "to": "popup-ui", "what": "sendResponse / chrome.storage.local writes (activeProxyData, spoofingSettings, stats) that survive service-worker restarts", "when": "after every proxy/spoof state change" },
+    { "from": "popup-ui", "to": "proxybro-worker", "what": "POST /validate {key, instanceId} to activate/check a Creem license key; setUninstallURL points at /deactivate", "when": "user enters a license key, on periodic re-validation, on uninstall" },
+    { "from": "popup-ui", "to": "ip-geo-services", "what": "Diagnostics probes: cloudflare cdn-cgi/trace, ipwho.is, api.ipify.org (first-ok wins)", "when": "Diagnostics tab open or exit-IP check" },
+    { "from": "background-worker", "to": "ip-geo-services", "what": "exit IP/country lookup through the active proxy, used to auto-heal timezone/language/fingerprint coherence", "when": "proxy activation, periodic coherence check" },
+    { "from": "background-worker", "to": "background-worker", "what": "registers/updates a MAIN-world document_start chrome.userScripts entry (id pb-spoof) that installs the fingerprint overrides before page scripts run", "when": "spoofing settings change while a proxy/identity is active" },
+    { "from": "proxybro-worker", "to": "creem", "what": "server-side license activation (POST /v1/licenses/activate with the secret API key)", "when": "every /validate call from the extension" },
+    { "from": "harness", "to": "popup-ui", "what": "loads popup.html+popup.js into a mocked chrome.* environment and dispatches DOMContentLoaded", "when": "pre-push gate run" }
+  ],
+  "apis": [],
+  "secrets": [],
+  "agent_notes": [
+    "This is a PUBLIC repo — CLAUDE.md and STACK.md (the private ops docs with live payment mode, worker deploy commands, secret NAMES) are gitignored on purpose. Never add payment/admin mechanics (endpoints, mode-flip vars, secret names) to THIS architecture.json — that belongs in the private proxybro-worker repo's own map. Extension itself ships with ZERO secrets (hard rule, enforced: grep the diff before any commit).",
+    "creem-worker.js in this repo is a REFERENCE copy only (unmodified since v1.19.0) — the actually-deployed license-validation worker (richer: D1 feedback, referral, rate-limit) lives in the separate PRIVATE proxybro-worker repo. Don't assume creem-worker.js is what's live.",
+    "Fail-closed invariant: proxy ON for a spoofing identity implies the reliable document_start user-script path is confirmed live (chrome.userScripts present) — background.js disconnects instead of falling back to a racy executeScript path that could leak the real fingerprint. Needs Chrome's per-extension 'Allow user scripts' toggle; without it, spoofing simply won't activate (by design, not a bug).",
+    "DNS-leak model (CLAUDE.md §9 resolution-model class): DoH is NOT proxy-tunneled — it hides DNS from the local network but still resolves from the REAL IP. True exit-country DNS only comes from an HTTP/SOCKS5 proxy scheme (the proxy resolves). DoH is force-enabled ONLY for SOCKS4 (which has no remote DNS at all — DoH beats a plaintext local-ISP leak there); for HTTP/HTTPS/SOCKS5 DoH stays OFF so Chrome hands DNS to the proxy. Forcing DoH globally would be the wrong lever (competes with the goal path) — see background.js:429-451.",
+    "popup.js has a real top-level-vs-`setupEventListeners` scope rule: a function called from BOTH initialize() and an event listener MUST be declared top-level, or it ReferenceErrors at runtime. Gate is `node --check popup.js` (syntax) PLUS harness.html driven through real state transitions (syntax-only checks miss this class of bug).",
+    "Store build = exactly 9 files: manifest.json, popup.html, popup.js, background.js, user-agents.json, icons/icon{16,32,48,128}.png. Everything else (test/, docs/, README, harness.html, creem-worker.js, redesign-mockup.html) is dev-only and excluded from the release zip.",
+    "MV3 forbids blocking webRequest — all request blocking/header rewriting uses dynamic declarativeNetRequest rules; webRequest is kept ONLY for onAuthRequired (proxy authentication), which MV3 still allows.",
+    "Free = 1 identity, enforced by `profiles.length >= 1` gates in popup.js (not a separate MAX_ constant) — locked (not deleted) identities beyond the first stay in storage so nothing is lost if the user later goes Pro.",
+    "Never claim simultaneous multi-account isolation in copy/UI — one browser = one cookie jar, ProxyBro is honestly sequential (one identity at a time), not a full anti-detect browser."
+  ],
+  "conventions": [
+    "No BRAIN.md in this repo — README.md + TODO.md + (gitignored) STACK.md/CLAUDE.md are the status docs; TODO.md tracks Next/Done, STACK.md (private) tracks live infra/payment mode.",
+    "One unit = one branch; never merge without an explicit 'go merge' (CLAUDE.md §3).",
+    "Gate before any push: `node --check popup.js` (+ background.js/creem-worker.js by extension) plus harness.html driven over real state transitions, not just syntax.",
+    "Two moving parts, two repos: this repo is the extension only; the worker+landing+payments backend is a separate PRIVATE repo (proxybro-worker) — the extension only ever calls proxybro.app/buy and /validate."
+  ]
+}
