@@ -23,6 +23,7 @@ Site: https://proxybro.app · Releases: https://github.com/humanperzeus/ProxyBro
 - **DNS-leak hardening** — DoH + DNS-prefetch off while proxied; SOCKS4 warning; HTTP/SOCKS5 resolve via proxy
 - **Any-format proxy import** — auto-detects host:port, user:pass@host, comma/space/tab, scheme-prefixed lists
 - Website trust: **open-source banner**, **vs-comparison** table, **About/maker**, **Product Hunt** badge, demo video
+- **Website hardened (proxybro.app)** — 5 security headers (HSTS, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, CSP `upgrade-insecure-requests`) + `X-Frame-Options: DENY`, and Google-spec favicons (192px + apple-touch 180 + favicon.ico, cache-busted `?v=1`). Edge-verified **5/5** on `/` and `/check` (2026-07-24)
 
 ## Next
 - [x] Chrome Web Store: **v1.23.8 live** ✅ (verified 2026-07-22)
