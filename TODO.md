@@ -24,6 +24,7 @@ Site: https://proxybro.app · Releases: https://github.com/humanperzeus/ProxyBro
 - **Any-format proxy import** — auto-detects host:port, user:pass@host, comma/space/tab, scheme-prefixed lists
 - Website trust: **open-source banner**, **vs-comparison** table, **About/maker**, **Product Hunt** badge, demo video
 - **Website hardened (proxybro.app)** — 5 security headers (HSTS, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, CSP `upgrade-insecure-requests`) + `X-Frame-Options: DENY`, and Google-spec favicons (192px + apple-touch 180 + favicon.ico, cache-busted `?v=1`). Edge-verified **5/5** on `/` and `/check` (2026-07-24)
+- **Website tuned (web-boost, proxybro.app)** — full tested CSP (default-src self · object-src none · frame-ancestors none · allows youtube/producthunt/github/bash.ws + `*.bash.ws` DNS-probes + CF-analytics), **a11y 92→97** (main landmark, table `th` scopes, content-link underlines, accent contrast `#2563eb`), WebP screenshots (−438 KB dead/replaced PNG), `Organization` JSON-LD. Live + real-browser verified: **0 CSP violations** on `/` and `/check` (worker `f5b8279c`, 2026-07-24)
 
 ## Next
 - [x] Chrome Web Store: **v1.23.8 live** ✅ (verified 2026-07-22)
